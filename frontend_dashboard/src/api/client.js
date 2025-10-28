@@ -1,13 +1,16 @@
 import axios from "axios";
 
 /**
- * API base URL is read from REACT_APP_API_URL (.env/.env.production).
- * Defaults to http://localhost:4000 for local development.
+ * API base URL
+ * Default: same-origin using relative '/api' so cookies/headers work without CORS.
+ * Override for split-host dev by setting REACT_APP_API_URL (e.g. http://localhost:4000).
  */
-const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:4000";
+const API_BASE =
+  (process.env.REACT_APP_API_URL && `${process.env.REACT_APP_API_URL}/api`) ||
+  "/api";
 
 export const api = axios.create({
-  baseURL: `${API_BASE}/api`,
+  baseURL: API_BASE,
   withCredentials: false,
 });
 

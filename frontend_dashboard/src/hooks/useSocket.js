@@ -12,15 +12,16 @@ export function useSocket() {
   const socketRef = useRef(null);
 
   useEffect(() => {
-    const SOCKET_BASE =
-      process.env.REACT_APP_SOCKET_URL ||
-      process.env.REACT_APP_API_URL ||
-      "http://localhost:4000";
+    // Same-origin by default: let socket.io use the current host when `url` is undefined.
+    // For split-host dev, allow explicit overrides via env.
+    const explicitBase =
+      process.env.REACT_APP_SOCKET_URL || process.env.REACT_APP_API_URL || null;
+    const url = explicitBase ? `${explicitBase}/realtime` : undefined;
     const SOCKET_PATH = process.env.REACT_APP_SOCKET_PATH || "/socket.io"; // keep in sync with backend SOCKET_PATH
     const token = localStorage.getItem("token");
     if (!token) return;
 
-    const s = io(`${SOCKET_BASE}/realtime`, {
+    const s = io(url, {
       path: SOCKET_PATH,
       transports: ["websocket"],
       auth: { token: `Bearer ${token}` },
