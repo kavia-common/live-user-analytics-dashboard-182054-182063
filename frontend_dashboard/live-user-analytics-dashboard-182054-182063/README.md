@@ -20,7 +20,7 @@ Real-time User Analytics Dashboard with React (frontend) and Node.js/Express + M
 
 Frontend (`frontend_dashboard/.env.example`):
 - `REACT_APP_CLERK_PUBLISHABLE_KEY` → Clerk publishable key (required)
-- `REACT_APP_API_URL` → backend base URL (http://localhost:4000 in dev) optional
+- `REACT_APP_API_URL` → backend base URL (http://localhost:4000 in dev) optional. If requests to `/api/stats/*` are blocked by an extension, pointing this to a different host can help.
 - `REACT_APP_SOCKET_URL` → backend base URL for socket (optional; defaults to API URL)
 - `REACT_APP_SOCKET_PATH` → socket path (defaults to `/socket.io`)
 - `REACT_APP_ADMIN_EMAILS` → optional CSV of admin emails (client-side UI gating only)

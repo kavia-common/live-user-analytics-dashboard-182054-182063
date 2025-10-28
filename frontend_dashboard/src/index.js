@@ -5,7 +5,11 @@ import App from './App';
 import { ClerkProvider } from '@clerk/clerk-react';
 import { BrowserRouter } from 'react-router-dom';
 
-// Wrap app with ClerkProvider using publishable key from env
+/**
+ * Wrap app with ClerkProvider using publishable key from env.
+ * If Clerk is not configured in development, the UI will still render and API calls will
+ * fall back to unauthenticated dev mocks for core dashboard views.
+ */
 const PUBLISHABLE_KEY = process.env.REACT_APP_CLERK_PUBLISHABLE_KEY;
 const CLERK_PROXY_URL = process.env.REACT_APP_CLERK_PROXY_URL || undefined;
 // Optional Clerk appearance or domain could be set via env without hardcoding

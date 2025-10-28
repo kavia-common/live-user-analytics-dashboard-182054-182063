@@ -20,7 +20,7 @@ Single-host mode is the default. The frontend calls the backend at the same orig
 
 Environment variables:
 - REACT_APP_CLERK_PUBLISHABLE_KEY (required) — Clerk frontend key
-- REACT_APP_API_URL — optional override of API base (default: same-origin)
+- REACT_APP_API_URL — optional override of API base (default: relative `/api` using CRA proxy). Use this to avoid ad blockers by hosting backend on a different host if needed.
 - REACT_APP_SOCKET_URL — optional override WS base (default: same-origin)
 - REACT_APP_SOCKET_PATH — defaults to `/socket.io`
 - REACT_APP_ADMIN_EMAILS — optional CSV of admin emails for client-side UI gating (server is authoritative)

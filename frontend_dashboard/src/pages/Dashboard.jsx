@@ -1,240 +1,43 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api/client";
+import StatCard from "../components/StatCard";
+import LineChart from "../components/charts/LineChart";
+import BarChart from "../components/charts/BarChart";
+import PieChart from "../components/charts/PieChart";
+import LiveActivityFeed from "../components/LiveActivityFeed";
 import { useSocket } from "../hooks/useSocket";
-
-function fmtNumber(v) {
-  const n = typeof v === "number" && isFinite(v) ? v : 0;
-  try {
-    return n.toLocaleString();
-  } catch {
-    return String(n);
-  }
-}
-
-const StatCard = ({ title, value, icon, trend }) => (
-  <div className="stat-card">
-    <div className="stat-header">
-      <span className="stat-title">{title}</span>
-      {icon && <span className="stat-icon">{icon}</span>}
-    </div>
-    <div className="stat-value">{fmtNumber(value)}</div>
-    {typeof trend === "number" && (
-      <div className={`stat-trend ${trend > 0 ? 'positive' : 'negative'}`}>
-        {trend > 0 ? '↑' : '↓'} {Math.abs(trend)}%
-      </div>
-    )}
-  </div>
-);
-
-const LineChart = ({ data }) => {
-  // Data expected from backend: [{ ts, count }]
-  const safe = Array.isArray(data) ? data : [];
-  const max = Math.max(...safe.map(d => (typeof d.count === "number" ? d.count : 0)), 1);
-  const labels = safe.map(d => {
-    const dt = d.ts ? new Date(d.ts) : null;
-    return dt ? dt.toLocaleTimeString() : "";
-  });
-  return (
-    <div className="chart-card">
-      <h3 className="chart-title">Events Timeline (Last 60 min)</h3>
-      <div className="line-chart">
-        <svg width="100%" height="200" viewBox="0 0 600 200" preserveAspectRatio="none">
-          <defs>
-            <linearGradient id="lineGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="rgb(99, 102, 241)" stopOpacity="0.3" />
-              <stop offset="100%" stopColor="rgb(99, 102, 241)" stopOpacity="0.05" />
-            </linearGradient>
-          </defs>
-          <path
-            d={safe.map((d, i) => {
-              const x = (i / Math.max(1, (safe.length - 1))) * 600;
-              const c = typeof d.count === "number" ? d.count : 0;
-              const y = 200 - (c / max) * 180;
-              return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
-            }).join(' ')}
-            fill="none"
-            stroke="rgb(99, 102, 241)"
-            strokeWidth="3"
-          />
-          <path
-            d={
-              safe.map((d, i) => {
-                const x = (i / Math.max(1, (safe.length - 1))) * 600;
-                const c = typeof d.count === "number" ? d.count : 0;
-                const y = 200 - (c / max) * 180;
-                return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
-              }).join(' ') + ' L 600 200 L 0 200 Z'
-            }
-            fill="url(#lineGradient)"
-          />
-        </svg>
-        <div className="chart-labels">
-          {labels.filter((_, i) => i % 3 === 0).map((label, i) => (
-            <span key={i} className="chart-label">{label}</span>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const BarChart = ({ title, data }) => {
-  const max = Math.max(...data.map(d => d.value), 1);
-  return (
-    <div className="chart-card">
-      <h3 className="chart-title">{title}</h3>
-      <div className="bar-chart">
-        {data.map((item, i) => (
-          <div key={i} className="bar-item">
-            <div className="bar-label">{item.label}</div>
-            <div className="bar-container">
-              <div 
-                className="bar-fill" 
-                style={{ width: `${(item.value / max) * 100}%` }}
-              >
-                <span className="bar-value">{item.value}</span>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const PieChart = ({ title, data }) => {
-  const total = data.reduce((sum, d) => sum + d.count, 0);
-  const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981'];
-  
-  return (
-    <div className="chart-card">
-      <h3 className="chart-title">{title}</h3>
-      <div className="pie-chart-container">
-        <div className="pie-legend">
-          {data.map((item, i) => (
-            <div key={i} className="legend-item">
-              <span className="legend-dot" style={{ backgroundColor: colors[i % colors.length] }}></span>
-              <span className="legend-label">{item.country}</span>
-              <span className="legend-value">{((item.count / total) * 100).toFixed(1)}%</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const LiveActivityFeed = ({ activities = [] }) => {
-  return (
-    <div className="chart-card">
-      <h3 className="chart-title">
-        <span>Live Activity Feed</span>
-        <span className="live-indicator">● LIVE</span>
-      </h3>
-      <div className="activity-feed">
-        {activities.length === 0 ? (
-          <div className="activity-empty">No recent activity</div>
-        ) : (
-          activities.map((activity, i) => (
-            <div key={i} className="activity-item">
-              <div className="activity-avatar">{activity.user?.slice(-2) || '??'}</div>
-              <div className="activity-details">
-                <div className="activity-main">
-                  <span className="activity-user">{activity.user}</span>
-                  <span className="activity-action">{activity.action}</span>
-                  <span className="activity-page">{activity.page}</span>
-                </div>
-                <div className="activity-time">{activity.time}</div>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  );
-};
 
 export default function Dashboard() {
   const [overview, setOverview] = useState({ activeSessions: 0, eventsCount: 0, uniqueUsers: 0 });
   const [series, setSeries] = useState([]);
   const [devices, setDevices] = useState([]);
   const [locations, setLocations] = useState([]);
-  const [activities, setActivities] = useState([]);
+  const [loading, setLoading] = useState(true);
   const { lastStats } = useSocket();
-
-  const mockData = () => {
-    const now = Date.now();
-    const s = Array.from({ length: 12 }).map((_, i) => ({
-      ts: new Date(now - (11 - i) * 5 * 60 * 1000).toISOString(),
-      count: Math.floor(5 + Math.random() * 15),
-    }));
-    return {
-      overview: {
-        activeSessions: 3,
-        eventsCount: s.reduce((a, b) => a + b.count, 0),
-        uniqueUsers: 2,
-      },
-      series: s,
-      devices: [
-        { deviceType: "desktop", browser: "Chrome", count: 24 },
-        { deviceType: "mobile", browser: "Safari", count: 12 },
-      ],
-      locations: [
-        { country: "US", count: 20 },
-        { country: "DE", count: 8 },
-        { country: "IN", count: 6 },
-      ],
-    };
-  };
 
   const fetchAll = async () => {
     try {
+      setLoading(true);
       const [ov, ts, dev, loc] = await Promise.all([
         api.get("/stats/overview?sinceMinutes=60"),
         api.get("/stats/timeseries?intervalMinutes=5&totalMinutes=60"),
         api.get("/stats/devices?sinceMinutes=60"),
         api.get("/stats/locations?sinceMinutes=60"),
       ]);
-      const ovData = ov?.data || {};
-      const tsData = (ts?.data && ts.data.series) || [];
-      const devData = (dev?.data && dev.data.devices) || [];
-      const locData = (loc?.data && loc.data.locations) || [];
-
-      // If backend returns empty, optionally fall back to mock in development to avoid all-zero UI
-      const useMock =
-        (!ovData || typeof ovData.eventsCount !== "number") &&
-        (process.env.NODE_ENV !== "production");
-
-      if (useMock) {
-        const m = mockData();
-        setOverview(m.overview);
-        setSeries(m.series);
-        setDevices(m.devices);
-        setLocations(m.locations);
-      } else {
-        setOverview({
-          activeSessions: ovData.activeSessions ?? 0,
-          eventsCount: ovData.eventsCount ?? 0,
-          uniqueUsers: ovData.uniqueUsers ?? 0,
-        });
-        setSeries(Array.isArray(tsData) ? tsData : []);
-        setDevices(Array.isArray(devData) ? devData : []);
-        setLocations(Array.isArray(locData) ? locData : []);
-      }
-    } catch (e) {
-      // In dev, show mock so the UI isn't blank; in prod, keep zeros
-      if (process.env.NODE_ENV !== "production") {
-        const m = mockData();
-        setOverview(m.overview);
-        setSeries(m.series);
-        setDevices(m.devices);
-        setLocations(m.locations);
-      }
+      setOverview(ov.data);
+      setSeries(ts.data.series || []);
+      setDevices(dev.data.devices || []);
+      setLocations(loc.data.locations || []);
+    } catch (error) {
+      console.error("Failed to fetch dashboard data:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchAll().catch(() => {});
+    fetchAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -243,380 +46,398 @@ export default function Dashboard() {
     }
   }, [lastStats]);
 
+  if (loading) {
+    return (
+      <div style={styles.loadingContainer}>
+        <div style={styles.loadingSpinner}></div>
+        <p style={styles.loadingText}>Loading dashboard data...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="dashboard">
-      <style>{`
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        
-        .dashboard {
-          min-height: 100vh;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          padding: 2rem;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        }
+    <div style={styles.dashboard}>
+      {/* Header Section */}
+      <div style={styles.dashboardHeader}>
+        <div style={styles.headerContent}>
+          <h1 style={styles.title}>Analytics Dashboard</h1>
+          <p style={styles.subtitle}>Real-time monitoring and insights</p>
+        </div>
+        <div style={styles.headerActions}>
+          <button style={styles.refreshButton} onClick={fetchAll} title="Refresh data">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+            </svg>
+            Refresh
+          </button>
+        </div>
+      </div>
 
-        .stats-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-          gap: 1.5rem;
-          margin-bottom: 2rem;
-        }
-
-        .stat-card {
-          background: rgba(255, 255, 255, 0.95);
-          backdrop-filter: blur(10px);
-          border-radius: 16px;
-          padding: 1.5rem;
-          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-          transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .stat-card:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15);
-        }
-
-        .stat-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 0.75rem;
-        }
-
-        .stat-title {
-          font-size: 0.875rem;
-          color: #64748b;
-          font-weight: 500;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-
-        .stat-icon {
-          font-size: 1.25rem;
-        }
-
-        .stat-value {
-          font-size: 2rem;
-          font-weight: 700;
-          color: #1e293b;
-          margin-bottom: 0.5rem;
-        }
-
-        .stat-trend {
-          font-size: 0.875rem;
-          font-weight: 600;
-        }
-
-        .stat-trend.positive { color: #10b981; }
-        .stat-trend.negative { color: #ef4444; }
-
-        .status-card {
-          background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-          color: white;
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-          align-items: center;
-          gap: 0.75rem;
-        }
-
-        .status-icon {
-          font-size: 2rem;
-        }
-
-        .status-badge {
-          background: rgba(255, 255, 255, 0.2);
-          padding: 0.5rem 1rem;
-          border-radius: 24px;
-          font-size: 0.875rem;
-          font-weight: 500;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
-
-        .pulse {
-          width: 8px;
-          height: 8px;
-          background: #10b981;
-          border-radius: 50%;
-          animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.5; transform: scale(1.2); }
-        }
-
-        .charts-section {
-          margin-bottom: 2rem;
-        }
-
-        .charts-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-          gap: 1.5rem;
-          margin-bottom: 1.5rem;
-        }
-
-        .chart-card {
-          background: rgba(255, 255, 255, 0.95);
-          backdrop-filter: blur(10px);
-          border-radius: 16px;
-          padding: 1.5rem;
-          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        }
-
-        .chart-title {
-          font-size: 1.125rem;
-          font-weight: 600;
-          color: #1e293b;
-          margin-bottom: 1.5rem;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-
-        .live-indicator {
-          color: #ef4444;
-          font-size: 0.75rem;
-          font-weight: 600;
-          letter-spacing: 1px;
-          animation: pulse 2s infinite;
-        }
-
-        .line-chart {
-          position: relative;
-        }
-
-        .chart-labels {
-          display: flex;
-          justify-content: space-between;
-          margin-top: 0.5rem;
-          font-size: 0.75rem;
-          color: #64748b;
-        }
-
-        .bar-chart {
-          display: flex;
-          flex-direction: column;
-          gap: 1rem;
-        }
-
-        .bar-item {
-          display: flex;
-          flex-direction: column;
-          gap: 0.5rem;
-        }
-
-        .bar-label {
-          font-size: 0.875rem;
-          color: #475569;
-          font-weight: 500;
-        }
-
-        .bar-container {
-          background: #f1f5f9;
-          border-radius: 8px;
-          height: 32px;
-          overflow: hidden;
-        }
-
-        .bar-fill {
-          background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 100%);
-          height: 100%;
-          border-radius: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: flex-end;
-          padding-right: 0.75rem;
-          transition: width 0.8s ease;
-          min-width: 60px;
-        }
-
-        .bar-value {
-          color: white;
-          font-size: 0.875rem;
-          font-weight: 600;
-        }
-
-        .pie-chart-container {
-          display: flex;
-          justify-content: center;
-        }
-
-        .pie-legend {
-          display: flex;
-          flex-direction: column;
-          gap: 0.75rem;
-          width: 100%;
-        }
-
-        .legend-item {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          padding: 0.5rem;
-          border-radius: 8px;
-          transition: background 0.2s;
-        }
-
-        .legend-item:hover {
-          background: #f8fafc;
-        }
-
-        .legend-dot {
-          width: 12px;
-          height: 12px;
-          border-radius: 50%;
-          flex-shrink: 0;
-        }
-
-        .legend-label {
-          flex: 1;
-          font-size: 0.875rem;
-          color: #475569;
-          font-weight: 500;
-        }
-
-        .legend-value {
-          font-size: 0.875rem;
-          color: #1e293b;
-          font-weight: 600;
-        }
-
-        .activity-feed {
-          display: flex;
-          flex-direction: column;
-          gap: 0.75rem;
-          max-height: 400px;
-          overflow-y: auto;
-        }
-
-        .activity-item {
-          display: flex;
-          gap: 1rem;
-          padding: 0.75rem;
-          background: #f8fafc;
-          border-radius: 12px;
-          transition: background 0.2s;
-        }
-
-        .activity-item:hover {
-          background: #f1f5f9;
-        }
-
-        .activity-avatar {
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          font-weight: 600;
-          font-size: 0.875rem;
-          flex-shrink: 0;
-        }
-
-        .activity-details {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          gap: 0.25rem;
-        }
-
-        .activity-main {
-          display: flex;
-          gap: 0.5rem;
-          flex-wrap: wrap;
-          align-items: center;
-        }
-
-        .activity-user {
-          font-weight: 600;
-          color: #1e293b;
-          font-size: 0.875rem;
-        }
-
-        .activity-action {
-          background: #dbeafe;
-          color: #1e40af;
-          padding: 0.125rem 0.5rem;
-          border-radius: 4px;
-          font-size: 0.75rem;
-          font-weight: 500;
-        }
-
-        .activity-page {
-          color: #64748b;
-          font-size: 0.875rem;
-        }
-
-        .activity-time {
-          font-size: 0.75rem;
-          color: #94a3b8;
-        }
-
-        .activity-empty {
-          text-align: center;
-          padding: 2rem;
-          color: #94a3b8;
-          font-size: 0.875rem;
-        }
-
-        @media (max-width: 768px) {
-          .dashboard { padding: 1rem; }
-          .stats-grid { grid-template-columns: 1fr; }
-          .charts-grid { grid-template-columns: 1fr; }
-          .stat-value { font-size: 1.75rem; }
-        }
-      `}</style>
-
-      <div className="stats-grid">
+      {/* Stats Grid */}
+      <div style={styles.statsGrid}>
         <StatCard 
           title="Active Sessions" 
           value={overview.activeSessions ?? 0}
+          trend="live"
           icon="👥"
-          trend={12}
         />
         <StatCard 
           title="Events (60m)" 
           value={overview.eventsCount ?? 0}
           icon="📊"
-          trend={8}
         />
         <StatCard 
-          title="Unique Users" 
+          title="Unique Users (60m)" 
           value={overview.uniqueUsers ?? 0}
-          icon="🌍"
-          trend={-3}
+          icon="👤"
         />
-        <div className="stat-card status-card">
-          <div className="status-icon">⚡</div>
-          <div className="status-badge">
-            <span className="pulse"></span>
-            Connected via Socket.io
+        <div style={styles.statCard}>
+          <div style={styles.statHeader}>
+            <div style={styles.statIcon}>🔗</div>
+            <h3 style={styles.statTitle}>Connection Status</h3>
+          </div>
+          <div style={styles.connectionBadge}>
+            <div style={styles.statusIndicator}></div>
+            Realtime connected via Socket.io
           </div>
         </div>
       </div>
 
-      <div className="charts-section">
-        <div className="charts-grid">
-          <LineChart data={series} />
-          <BarChart 
-            title="Device & Browser" 
-            data={devices.map(d => ({ 
-              label: `${d.deviceType} · ${d.browser}`, 
-              value: d.count 
-            }))} 
-          />
+      {/* Charts Section */}
+      <div style={styles.chartsSection}>
+        <div style={styles.chartGrid}>
+          <div style={{ ...styles.chartContainer, ...styles.fullWidth }}>
+            <div style={styles.chartHeader}>
+              <h3 style={styles.chartTitle}>Activity Over Time</h3>
+              <span style={styles.chartSubtitle}>Last 60 minutes • 5min intervals</span>
+            </div>
+            <LineChart data={series} />
+          </div>
+          
+          <div style={styles.chartContainer}>
+            <div style={styles.chartHeader}>
+              <h3 style={styles.chartTitle}>Devices & Browsers</h3>
+            </div>
+            <BarChart 
+              data={devices.map(d => ({ 
+                label: `${d.deviceType} · ${d.browser}`, 
+                value: d.count 
+              }))} 
+            />
+          </div>
+          
+          <div style={styles.chartContainer}>
+            <div style={styles.chartHeader}>
+              <h3 style={styles.chartTitle}>Top Countries</h3>
+              <span style={styles.chartSubtitle}>User distribution</span>
+            </div>
+            <PieChart data={locations} />
+          </div>
         </div>
-        <PieChart title="Top Countries" data={locations} />
       </div>
 
-      <LiveActivityFeed activities={activities} />
+      {/* Live Activity Section */}
+      <div style={styles.activitySection}>
+        <div style={styles.sectionHeader}>
+          <h2 style={styles.sectionTitle}>Live Activity Feed</h2>
+          <div style={styles.liveIndicator}>
+            <div style={styles.pulseDot}></div>
+            LIVE
+          </div>
+        </div>
+        <LiveActivityFeed />
+      </div>
     </div>
   );
 }
+
+const styles = {
+  dashboard: {
+    padding: "24px",
+    maxWidth: "1400px",
+    margin: "0 auto",
+    background: "#f8fafc",
+    minHeight: "100vh",
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif"
+  },
+  
+  loadingContainer: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: "60vh",
+    gap: "16px"
+  },
+  
+  loadingSpinner: {
+    width: "40px",
+    height: "40px",
+    border: "4px solid #e2e8f0",
+    borderLeft: "4px solid #3b82f6",
+    borderRadius: "50%",
+    animation: "spin 1s linear infinite"
+  },
+  
+  loadingText: {
+    color: "#64748b",
+    fontSize: "16px",
+    margin: 0
+  },
+  
+  dashboardHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: "32px"
+  },
+  
+  headerContent: {
+    flex: 1
+  },
+  
+  title: {
+    fontSize: "28px",
+    fontWeight: "700",
+    color: "#1e293b",
+    margin: "0 0 4px 0"
+  },
+  
+  subtitle: {
+    color: "#64748b",
+    margin: 0,
+    fontSize: "16px"
+  },
+  
+  headerActions: {
+    marginLeft: "auto"
+  },
+  
+  refreshButton: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    padding: "8px 16px",
+    background: "white",
+    border: "1px solid #e2e8f0",
+    borderRadius: "8px",
+    color: "#475569",
+    fontWeight: "500",
+    cursor: "pointer",
+    transition: "all 0.2s",
+    fontFamily: "inherit",
+    fontSize: "14px"
+  },
+  
+  statsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gap: "20px",
+    marginBottom: "32px"
+  },
+  
+  statCard: {
+    background: "white",
+    padding: "24px",
+    borderRadius: "12px",
+    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
+    border: "1px solid #e2e8f0",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center"
+  },
+  
+  statHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    marginBottom: "16px"
+  },
+  
+  statIcon: {
+    fontSize: "20px"
+  },
+  
+  statTitle: {
+    margin: 0,
+    fontSize: "14px",
+    fontWeight: "600",
+    color: "#64748b",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em"
+  },
+  
+  connectionBadge: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    padding: "8px 12px",
+    background: "#f0f9ff",
+    border: "1px solid #bae6fd",
+    borderRadius: "6px",
+    color: "#0369a1",
+    fontSize: "14px",
+    fontWeight: "500"
+  },
+  
+  statusIndicator: {
+    width: "8px",
+    height: "8px",
+    background: "#22c55e",
+    borderRadius: "50%",
+    animation: "pulse 2s infinite"
+  },
+  
+  chartsSection: {
+    marginBottom: "32px"
+  },
+  
+  chartGrid: {
+    display: "grid",
+    gridTemplateColumns: "2fr 1fr",
+    gap: "20px"
+  },
+  
+  chartContainer: {
+    background: "white",
+    padding: "24px",
+    borderRadius: "12px",
+    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
+    border: "1px solid #e2e8f0"
+  },
+  
+  fullWidth: {
+    gridColumn: "1 / -1"
+  },
+  
+  chartHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: "20px"
+  },
+  
+  chartTitle: {
+    margin: 0,
+    fontSize: "18px",
+    fontWeight: "600",
+    color: "#1e293b"
+  },
+  
+  chartSubtitle: {
+    color: "#64748b",
+    fontSize: "14px"
+  },
+  
+  activitySection: {
+    background: "white",
+    borderRadius: "12px",
+    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
+    border: "1px solid #e2e8f0",
+    overflow: "hidden"
+  },
+  
+  sectionHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    padding: "24px 24px 0",
+    marginBottom: 0
+  },
+  
+  sectionTitle: {
+    margin: 0,
+    fontSize: "18px",
+    fontWeight: "600",
+    color: "#1e293b"
+  },
+  
+  liveIndicator: {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    padding: "4px 8px",
+    background: "#fef2f2",
+    border: "1px solid #fecaca",
+    borderRadius: "4px",
+    color: "#dc2626",
+    fontSize: "12px",
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em"
+  },
+  
+  pulseDot: {
+    width: "6px",
+    height: "6px",
+    background: "#dc2626",
+    borderRadius: "50%",
+    animation: "pulse 1.5s infinite"
+  }
+};
+
+// Add global styles for animations
+const styleSheet = document.styleSheets[0];
+styleSheet.insertRule(`
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+`, styleSheet.cssRules.length);
+
+styleSheet.insertRule(`
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+`, styleSheet.cssRules.length);
+
+// Responsive styles
+styleSheet.insertRule(`
+  @media (max-width: 1024px) {
+    .chart-grid {
+      grid-template-columns: 1fr;
+    }
+    
+    .chart-container.full-width {
+      grid-column: 1;
+    }
+  }
+`, styleSheet.cssRules.length);
+
+styleSheet.insertRule(`
+  @media (max-width: 768px) {
+    .dashboard {
+      padding: 16px;
+    }
+    
+    .dashboard-header {
+      flex-direction: column;
+      gap: 16px;
+    }
+    
+    .header-actions {
+      margin-left: 0;
+      align-self: stretch;
+    }
+    
+    .btn-refresh {
+      justify-content: center;
+      width: 100%;
+    }
+    
+    .stats-grid {
+      grid-template-columns: 1fr;
+    }
+    
+    .chart-header {
+      flex-direction: column;
+      gap: 8px;
+      align-items: flex-start;
+    }
+    
+    .chart-subtitle {
+      margin-left: 0;
+    }
+  }
+`, styleSheet.cssRules.length);

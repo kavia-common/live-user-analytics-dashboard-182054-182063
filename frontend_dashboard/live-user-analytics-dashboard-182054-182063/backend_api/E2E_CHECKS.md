@@ -22,3 +22,4 @@ If MongoDB is unavailable in development, use dev-only in-memory fallback:
 Notes:
 - Legacy local `/api/auth/signup` and `/api/auth/login` are disabled by default. Enable with `LOCAL_JWT_AUTH=true` for dev.
 - All endpoints return JSON and include debug logs in development.
+- Some ad blockers may block `/api/stats/*`. If you see ERR_BLOCKED_BY_CLIENT, set REACT_APP_API_URL to your backend host or disable the blocker. The client will attempt an `/api/analytics/*` fallback automatically.

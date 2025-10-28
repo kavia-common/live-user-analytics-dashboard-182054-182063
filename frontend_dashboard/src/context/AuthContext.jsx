@@ -86,6 +86,14 @@ export function AuthProvider({ children }) {
     };
     if (clerkAuthLoaded && clerkUserLoaded) {
       loadRole();
+    } else if (process.env.NODE_ENV !== "production") {
+      // Dev fallback: allow UI to render with inferred role even if Clerk hasn't fully loaded
+      const adminEmails = (process.env.REACT_APP_ADMIN_EMAILS || "")
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      const email = clerkUser?.primaryEmailAddress?.emailAddress?.toLowerCase?.();
+      setRole(email && adminEmails.includes(email) ? "admin" : "user");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn, clerkAuthLoaded, clerkUserLoaded]);
