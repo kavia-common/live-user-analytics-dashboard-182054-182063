@@ -3,14 +3,14 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
-import Login from "../pages/Login";
 import Dashboard from "../pages/Dashboard";
 import Users from "../pages/Users";
 import Settings from "../pages/Settings";
+import { SignIn, SignUp } from "@clerk/clerk-react";
 
 function ProtectedRoute({ children, requireAdmin = false }) {
-  const { user, isAdmin } = useAuth();
-  if (!user) return <Navigate to="/login" replace />;
+  const { isAuthenticated, isAdmin } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/sign-in" replace />;
   if (requireAdmin && !isAdmin) return <Navigate to="/" replace />;
   return children;
 }
@@ -33,10 +33,12 @@ export default function AppRouter() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route
-          path="/login"
-          element={<Login />}
-        />
+        <Route path="/sign-in" element={
+          <div className="login-wrap"><div className="login-card"><SignIn routing="path" path="/sign-in" /></div></div>
+        } />
+        <Route path="/sign-up" element={
+          <div className="login-wrap"><div className="login-card"><SignUp routing="path" path="/sign-up" /></div></div>
+        } />
         <Route
           path="/"
           element={

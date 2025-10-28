@@ -1,90 +1,100 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { api, setAuthToken } from "../api/client";
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { api } from "../api/client";
+import { useAuth as useClerkAuth, useUser as useClerkUser, SignOutButton } from "@clerk/clerk-react";
 
 // PUBLIC_INTERFACE
 export const AuthContext = createContext(null);
 
+// Internal singleton to allow api client to retrieve Clerk token without circular imports
+let tokenProviderRef = { current: null };
+
 /**
  * PUBLIC_INTERFACE
- * AuthProvider wraps the app with auth state and methods.
+ * getClerkTokenProvider returns a function that yields a fresh Clerk JWT.
+ */
+export function getClerkTokenProvider() {
+  return tokenProviderRef.current;
+}
+
+/**
+ * PUBLIC_INTERFACE
+ * AuthProvider sources auth state from Clerk and augments with backend role.
  */
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem("user");
-    return saved ? JSON.parse(saved) : null;
-  });
-  const [loading, setLoading] = useState(false);
+  const { isSignedIn, getToken, signOut } = useClerkAuth();
+  const { user: clerkUser, isLoaded } = useClerkUser();
+  const [role, setRole] = useState("user");
+  const [fetchingRole, setFetchingRole] = useState(false);
 
+  // expose token provider for API client
   useEffect(() => {
-    if (user) {
-      localStorage.setItem("user", JSON.stringify(user));
-    } else {
-      localStorage.removeItem("user");
-    }
-  }, [user]);
-
-  const login = async (email, password) => {
-    setLoading(true);
-    try {
-      const { data } = await api.post("/auth/login", { email, password });
-      setAuthToken(data.token);
-      setUser(data.user);
-      return { ok: true };
-    } catch (e) {
-      return { ok: false, error: e?.response?.data?.error || "Login failed" };
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const signup = async (email, password, name) => {
-    setLoading(true);
-    try {
-      const { data } = await api.post("/auth/signup", { email, password, name });
-      setAuthToken(data.token);
-      setUser(data.user);
-      return { ok: true };
-    } catch (e) {
-      return { ok: false, error: e?.response?.data?.error || "Signup failed" };
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const logout = () => {
-    setAuthToken(null);
-    setUser(null);
-  };
-
-  const fetchMe = async () => {
-    try {
-      const { data } = await api.get("/auth/me");
-      if (data?.user) {
-        setUser(data.user);
+    tokenProviderRef.current = async () => {
+      try {
+        // default template
+        return await getToken({ template: "default" });
+      } catch {
+        return null;
       }
-    } catch {
-      // ignore
-    }
-  };
+    };
+    return () => { tokenProviderRef.current = null; };
+  }, [getToken]);
 
+  // Fetch role from backend /api/auth/me (source of truth)
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (token && !user) {
-      fetchMe();
-    }
+    const loadRole = async () => {
+      if (!isSignedIn) {
+        setRole("user");
+        return;
+      }
+      setFetchingRole(true);
+      try {
+        const { data } = await api.get("/auth/me");
+        if (data?.user?.role) {
+          setRole(data.user.role);
+        } else {
+          // fallback: infer from ADMIN_EMAILS env (client-only gating)
+          const adminEmails = (process.env.REACT_APP_ADMIN_EMAILS || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+          const email = clerkUser?.primaryEmailAddress?.emailAddress?.toLowerCase?.();
+          setRole(email && adminEmails.includes(email) ? "admin" : "user");
+        }
+      } catch {
+        // fallback if backend not reachable
+        const adminEmails = (process.env.REACT_APP_ADMIN_EMAILS || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+        const email = clerkUser?.primaryEmailAddress?.emailAddress?.toLowerCase?.();
+        setRole(email && adminEmails.includes(email) ? "admin" : "user");
+      } finally {
+        setFetchingRole(false);
+      }
+    };
+    loadRole();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isSignedIn, isLoaded]);
 
   const value = useMemo(
     () => ({
-      user,
-      loading,
-      isAdmin: user?.role === "admin",
-      login,
-      signup,
-      logout,
+      isAuthenticated: !!isSignedIn,
+      user: clerkUser
+        ? {
+            id: clerkUser.id,
+            email: clerkUser.primaryEmailAddress?.emailAddress || "",
+            name: clerkUser.fullName || clerkUser.username || "",
+            role,
+          }
+        : null,
+      isAdmin: role === "admin",
+      loading: !isLoaded || fetchingRole,
+      logout: () => signOut().catch(() => {}),
+      // PUBLIC_INTERFACE
+      async getToken() {
+        /** Returns a fresh Clerk session JWT. */
+        try {
+          return await getToken({ template: "default" });
+        } catch {
+          return null;
+        }
+      },
     }),
-    [user, loading]
+    [isSignedIn, isLoaded, clerkUser, role, fetchingRole, getToken, signOut]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

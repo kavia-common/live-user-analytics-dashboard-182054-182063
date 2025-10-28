@@ -4,10 +4,10 @@ A modern, responsive, real-time User Analytics Dashboard UI implementing the Vio
 
 ## Features
 
-- React Router v6: Dashboard, Users (admin only), Settings, Login
-- AuthContext with JWT, persisted in localStorage
-- Axios API client with request/response interceptors
-- Socket.io client hook for realtime updates (/realtime namespace with JWT)
+- React Router v6: Dashboard, Users (admin only), Settings, Auth (Clerk SignIn/SignUp)
+- Auth via Clerk: useClerk/useUser, token attached to API calls
+- Axios API client with Clerk token interceptor
+- Socket.io client hook for realtime updates (/realtime namespace)
 - Charts via Recharts (line, bar, pie)
 - Live activity feed, stat cards, and responsive layout with sidebar + header
 - Dark mode with persistence and theme variables
@@ -18,44 +18,41 @@ Single-host mode is the default. The frontend calls the backend at the same orig
 - HTTP requests go to relative `/api/*`
 - Socket.io connects to the same origin at path `/socket.io` and namespace `/realtime`
 
-No environment variables are required for single-host mode.
+Environment variables:
+- REACT_APP_CLERK_PUBLISHABLE_KEY (required) — Clerk frontend key
+- REACT_APP_API_URL — optional override of API base (default: same-origin)
+- REACT_APP_SOCKET_URL — optional override WS base (default: same-origin)
+- REACT_APP_SOCKET_PATH — defaults to `/socket.io`
+- REACT_APP_ADMIN_EMAILS — optional CSV of admin emails for client-side UI gating (server is authoritative)
+
+### Clerk setup
+
+1) Create a Clerk application and get:
+- Publishable Key → set REACT_APP_CLERK_PUBLISHABLE_KEY in frontend
+- Secret Key → set CLERK_SECRET_KEY in backend
+
+2) In Clerk dashboard, add redirect URLs for:
+- http://localhost:3000/sign-in
+- http://localhost:3000/sign-up
+
+3) In production, set the correct URLs for your domain.
 
 ### Cloud Preview (single-host dev)
 
-Some cloud environments expose the CRA dev server via a preview URL and inject a non-localhost Host header. By default, CRA rejects unknown hosts with "Invalid Host header". This repo includes a dev-only override:
-
-- `.env.development.local` sets:
-  - `HOST=0.0.0.0` so the dev server binds externally
-  - `DANGEROUSLY_DISABLE_HOST_CHECK=true` so the preview host is accepted (dev only)
-- `package.json` has a `proxy` pointing to the backend at `http://localhost:4000` and also proxies websockets (`/socket.io`), so both HTTP and WS go through the same origin.
-- Optional: use `npm run start:preview` to force these envs if your platform ignores `.env.development.local`.
+Same as before; CRA proxy is configured and websockets are proxied. Use `npm run start:preview` if needed.
 
 Verify:
 - Backend running on port 4000
-- Start frontend:
-  - `npm start` (uses .env.development.local) or
-  - `npm run start:preview`
-- Check: `curl <your-preview-url>/api/health` → should return `{ status: "ok", ... }`.
-
-WebSocket notes:
-- CRA's built-in proxy forwards websockets to the backend automatically when `proxy` is set, so Socket.io (`/socket.io` + `/realtime`) works on the same origin without extra config.
+- Frontend at http://localhost:3000
+- Check: `curl http://localhost:3000/api/health` → `{ status: "ok" }`
 
 ### Development proxy (local)
 
-- The CRA dev server is configured with `"proxy": "http://localhost:4000"` in `package.json`.
-- When running `npm start` in `frontend_dashboard` and the backend is running on port 4000, all requests to:
-  - `/api/*` will be proxied to the backend.
-  - `/socket.io/*` (websocket) will also be proxied to the backend.
-- Proxy preserves JSON semantics and does not transform request/response bodies. POST/PUT are forwarded correctly.
-- Verify with:
-  - `curl -i http://localhost:3000/api/health` → 200 JSON
-  - `curl -i -X POST http://localhost:3000/api/auth/signup -H 'Content-Type: application/json' -d '{"email":"u1@example.com","password":"secret123"}'`
-
-To use split-host for local development without relying on the proxy, create a `.env` file:
-
-- `REACT_APP_API_URL=http://localhost:4000`
-- `REACT_APP_SOCKET_URL=http://localhost:4000` (optional; defaults to API URL)
-- `REACT_APP_SOCKET_PATH=/socket.io` (optional; default is `/socket.io`)
+- `"proxy": "http://localhost:4000"` forwards `/api/*` and `/socket.io/*` to backend.
+- For split-host dev, create `.env` with:
+  - `REACT_APP_API_URL=http://localhost:4000`
+  - `REACT_APP_SOCKET_URL=http://localhost:4000`
+  - `REACT_APP_SOCKET_PATH=/socket.io`
 
 ## Getting Started
 
@@ -81,13 +78,13 @@ npm run build
 
 ## Pages
 
-- Login: Email/password login or quick signup (glassmorphism design)
+- SignIn/SignUp: Clerk-hosted components themed within app shell wrappers
 - Dashboard: KPIs, timeseries, devices/locations charts, and live feed
 - Users: Admin-only user list and role updates
 - Settings: Profile summary and theme toggle
 
 ## Notes
 
-- All non-auth API requests require JWT bearer token.
-- Socket.io connects to `/realtime` namespace using the JWT during handshake.
-- Users page is protected with role-based guard (admin).
+- All non-auth API requests include Clerk JWT via Authorization header.
+- Socket.io connects to `/realtime` namespace; backend handshake verifies Clerk token (same-origin).
+- isAdmin is determined by backend `/api/auth/me`. For UI-only hints, you may set REACT_APP_ADMIN_EMAILS to a CSV of emails, but the server is the source of truth.

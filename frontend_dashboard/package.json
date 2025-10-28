@@ -3,12 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@clerk/clerk-js": "^5.102.1",
+    "@clerk/clerk-react": "^5.53.3",
     "axios": "^1.7.7",
-    "recharts": "^2.12.7",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.26.2",
     "react-scripts": "^5.0.1",
+    "recharts": "^2.12.7",
     "socket.io-client": "^4.7.5"
   },
   "scripts": {

@@ -1,4 +1,5 @@
 import axios from "axios";
+import { getClerkTokenProvider } from "../context/AuthContext";
 
 /**
  * API base URL
@@ -15,26 +16,30 @@ export const api = axios.create({
   withCredentials: false,
 });
 
-// Attach token
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
-  if (token) {
-    config.headers = config.headers || {};
-    config.headers.Authorization = `Bearer ${token}`;
+// Attach Clerk token on each request
+api.interceptors.request.use(async (config) => {
+  const getToken = getClerkTokenProvider();
+  if (getToken) {
+    try {
+      const token = await getToken();
+      if (token) {
+        config.headers = config.headers || {};
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch {
+      // ignore token errors; request will likely 401
+    }
   }
   return config;
 });
 
-// Handle 401
+// Handle 401 by redirecting to Clerk sign-in
 api.interceptors.response.use(
   (r) => r,
   (error) => {
     if (error?.response?.status === 401) {
-      // If unauthorized, clear auth and redirect to login
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-      if (window.location.pathname !== "/login") {
-        window.location.replace("/login");
+      if (!window.location.pathname.startsWith("/sign-in")) {
+        window.location.replace("/sign-in");
       }
     }
     return Promise.reject(error);
@@ -42,11 +47,6 @@ api.interceptors.response.use(
 );
 
 // PUBLIC_INTERFACE
-export function setAuthToken(token) {
-  /** Sets the JWT token to be used by the API client. */
-  if (token) {
-    localStorage.setItem("token", token);
-  } else {
-    localStorage.removeItem("token");
-  }
+export function setAuthToken(_token) {
+  /** Deprecated: token is managed by Clerk now. No-op kept for compatibility. */
 }
