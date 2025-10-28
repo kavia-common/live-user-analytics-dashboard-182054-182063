@@ -16,15 +16,28 @@ export function useSocket() {
     let cancelled = false;
 
     (async () => {
-      const explicitBase =
-        process.env.REACT_APP_SOCKET_URL || process.env.REACT_APP_API_URL || null;
-      const url = explicitBase ? `${explicitBase}/realtime` : undefined;
-      const SOCKET_PATH = process.env.REACT_APP_SOCKET_PATH || "/socket.io";
+      // Resolve base URL: prefer socket URL, then API URL; include composite fallbacks
+      const directSocket = process.env.REACT_APP_SOCKET_URL || process.env["REACT_APP_frontend_dashboard.REACT_APP_SOCKET_URL"];
+      const directApi = process.env.REACT_APP_API_URL || process.env["REACT_APP_frontend_dashboard.REACT_APP_API_URL"];
+      const explicitBase = directSocket || directApi || null;
+      const url = explicitBase ? `${String(explicitBase).replace(/\/+$/, "")}/realtime` : undefined;
+      const SOCKET_PATH =
+        process.env.REACT_APP_SOCKET_PATH ||
+        process.env["REACT_APP_frontend_dashboard.REACT_APP_SOCKET_PATH"] ||
+        "/socket.io";
 
       const getToken = getClerkTokenProvider();
-      if (!getToken) return;
+      if (!getToken) {
+        // eslint-disable-next-line no-console
+        console.debug("[socket] No token provider yet; skipping connect");
+        return;
+      }
       const token = await getToken();
-      if (!token || cancelled) return;
+      if (!token || cancelled) {
+        // eslint-disable-next-line no-console
+        console.debug("[socket] Token unavailable or effect cancelled; skipping connect");
+        return;
+      }
 
       const s = io(url, {
         path: SOCKET_PATH,
@@ -36,7 +49,8 @@ export function useSocket() {
       s.on("connect", () => setConnected(true));
       s.on("disconnect", () => setConnected(false));
       s.on("connected", () => {
-        /* handshake */
+        // eslint-disable-next-line no-console
+        console.debug("[socket] connected");
       });
 
       s.on("activity:new", (payload) => {

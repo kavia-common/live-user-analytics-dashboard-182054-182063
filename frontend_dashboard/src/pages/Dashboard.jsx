@@ -2,14 +2,23 @@ import React, { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { useSocket } from "../hooks/useSocket";
 
+function fmtNumber(v) {
+  const n = typeof v === "number" && isFinite(v) ? v : 0;
+  try {
+    return n.toLocaleString();
+  } catch {
+    return String(n);
+  }
+}
+
 const StatCard = ({ title, value, icon, trend }) => (
   <div className="stat-card">
     <div className="stat-header">
       <span className="stat-title">{title}</span>
       {icon && <span className="stat-icon">{icon}</span>}
     </div>
-    <div className="stat-value">{value.toLocaleString()}</div>
-    {trend && (
+    <div className="stat-value">{fmtNumber(value)}</div>
+    {typeof trend === "number" && (
       <div className={`stat-trend ${trend > 0 ? 'positive' : 'negative'}`}>
         {trend > 0 ? '↑' : '↓'} {Math.abs(trend)}%
       </div>
@@ -18,7 +27,13 @@ const StatCard = ({ title, value, icon, trend }) => (
 );
 
 const LineChart = ({ data }) => {
-  const max = Math.max(...data.map(d => d.events), 1);
+  // Data expected from backend: [{ ts, count }]
+  const safe = Array.isArray(data) ? data : [];
+  const max = Math.max(...safe.map(d => (typeof d.count === "number" ? d.count : 0)), 1);
+  const labels = safe.map(d => {
+    const dt = d.ts ? new Date(d.ts) : null;
+    return dt ? dt.toLocaleTimeString() : "";
+  });
   return (
     <div className="chart-card">
       <h3 className="chart-title">Events Timeline (Last 60 min)</h3>
@@ -31,9 +46,10 @@ const LineChart = ({ data }) => {
             </linearGradient>
           </defs>
           <path
-            d={data.map((d, i) => {
-              const x = (i / (data.length - 1)) * 600;
-              const y = 200 - (d.events / max) * 180;
+            d={safe.map((d, i) => {
+              const x = (i / Math.max(1, (safe.length - 1))) * 600;
+              const c = typeof d.count === "number" ? d.count : 0;
+              const y = 200 - (c / max) * 180;
               return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
             }).join(' ')}
             fill="none"
@@ -41,17 +57,20 @@ const LineChart = ({ data }) => {
             strokeWidth="3"
           />
           <path
-            d={data.map((d, i) => {
-              const x = (i / (data.length - 1)) * 600;
-              const y = 200 - (d.events / max) * 180;
-              return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
-            }).join(' ') + ' L 600 200 L 0 200 Z'}
+            d={
+              safe.map((d, i) => {
+                const x = (i / Math.max(1, (safe.length - 1))) * 600;
+                const c = typeof d.count === "number" ? d.count : 0;
+                const y = 200 - (c / max) * 180;
+                return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+              }).join(' ') + ' L 600 200 L 0 200 Z'
+            }
             fill="url(#lineGradient)"
           />
         </svg>
         <div className="chart-labels">
-          {data.filter((_, i) => i % 3 === 0).map((d, i) => (
-            <span key={i} className="chart-label">{d.time}</span>
+          {labels.filter((_, i) => i % 3 === 0).map((label, i) => (
+            <span key={i} className="chart-label">{label}</span>
           ))}
         </div>
       </div>
@@ -143,17 +162,75 @@ export default function Dashboard() {
   const [activities, setActivities] = useState([]);
   const { lastStats } = useSocket();
 
+  const mockData = () => {
+    const now = Date.now();
+    const s = Array.from({ length: 12 }).map((_, i) => ({
+      ts: new Date(now - (11 - i) * 5 * 60 * 1000).toISOString(),
+      count: Math.floor(5 + Math.random() * 15),
+    }));
+    return {
+      overview: {
+        activeSessions: 3,
+        eventsCount: s.reduce((a, b) => a + b.count, 0),
+        uniqueUsers: 2,
+      },
+      series: s,
+      devices: [
+        { deviceType: "desktop", browser: "Chrome", count: 24 },
+        { deviceType: "mobile", browser: "Safari", count: 12 },
+      ],
+      locations: [
+        { country: "US", count: 20 },
+        { country: "DE", count: 8 },
+        { country: "IN", count: 6 },
+      ],
+    };
+  };
+
   const fetchAll = async () => {
-    const [ov, ts, dev, loc] = await Promise.all([
-      api.get("/stats/overview?sinceMinutes=60"),
-      api.get("/stats/timeseries?intervalMinutes=5&totalMinutes=60"),
-      api.get("/stats/devices?sinceMinutes=60"),
-      api.get("/stats/locations?sinceMinutes=60"),
-    ]);
-    setOverview(ov.data);
-    setSeries(ts.data.series || []);
-    setDevices(dev.data.devices || []);
-    setLocations(loc.data.locations || []);
+    try {
+      const [ov, ts, dev, loc] = await Promise.all([
+        api.get("/stats/overview?sinceMinutes=60"),
+        api.get("/stats/timeseries?intervalMinutes=5&totalMinutes=60"),
+        api.get("/stats/devices?sinceMinutes=60"),
+        api.get("/stats/locations?sinceMinutes=60"),
+      ]);
+      const ovData = ov?.data || {};
+      const tsData = (ts?.data && ts.data.series) || [];
+      const devData = (dev?.data && dev.data.devices) || [];
+      const locData = (loc?.data && loc.data.locations) || [];
+
+      // If backend returns empty, optionally fall back to mock in development to avoid all-zero UI
+      const useMock =
+        (!ovData || typeof ovData.eventsCount !== "number") &&
+        (process.env.NODE_ENV !== "production");
+
+      if (useMock) {
+        const m = mockData();
+        setOverview(m.overview);
+        setSeries(m.series);
+        setDevices(m.devices);
+        setLocations(m.locations);
+      } else {
+        setOverview({
+          activeSessions: ovData.activeSessions ?? 0,
+          eventsCount: ovData.eventsCount ?? 0,
+          uniqueUsers: ovData.uniqueUsers ?? 0,
+        });
+        setSeries(Array.isArray(tsData) ? tsData : []);
+        setDevices(Array.isArray(devData) ? devData : []);
+        setLocations(Array.isArray(locData) ? locData : []);
+      }
+    } catch (e) {
+      // In dev, show mock so the UI isn't blank; in prod, keep zeros
+      if (process.env.NODE_ENV !== "production") {
+        const m = mockData();
+        setOverview(m.overview);
+        setSeries(m.series);
+        setDevices(m.devices);
+        setLocations(m.locations);
+      }
+    }
   };
 
   useEffect(() => {

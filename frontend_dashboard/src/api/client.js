@@ -7,9 +7,15 @@ import { getClerkTokenProvider } from "../context/AuthContext";
  * In development, CRA dev server will proxy '/api' and '/socket.io' to http://localhost:4000 (see package.json "proxy").
  * Override for split-host dev by setting REACT_APP_API_URL (e.g. http://localhost:4000) if you don't want to rely on proxy.
  */
-const API_BASE =
-  (process.env.REACT_APP_API_URL && `${process.env.REACT_APP_API_URL}/api`) ||
-  "/api";
+function resolveApiBase() {
+  const direct = process.env.REACT_APP_API_URL;
+  // compatibility for composite variable name provided by orchestrator
+  const composite = process.env["REACT_APP_frontend_dashboard.REACT_APP_API_URL"];
+  const base = direct || composite || "";
+  return base ? `${base.replace(/\/+$/, "")}/api` : "/api";
+}
+
+const API_BASE = resolveApiBase();
 
 export const api = axios.create({
   baseURL: API_BASE,
