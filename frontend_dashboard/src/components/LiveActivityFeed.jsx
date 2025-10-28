@@ -1,10 +1,15 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { useSocket } from "../hooks/useSocket";
+import Card from "./ui/Card";
+import Badge from "./ui/Badge";
+import "./LiveActivityFeed.css";
 
-// PUBLIC_INTERFACE
+/**
+ * PUBLIC_INTERFACE
+ * LiveActivityFeed shows a live-updating feed of activity events with enhanced styling.
+ */
 export default function LiveActivityFeed() {
-  /** Shows a live-updating feed of activity events from Socket.io and recent API. */
   const [items, setItems] = useState([]);
   const { lastActivity } = useSocket();
 
@@ -27,21 +32,68 @@ export default function LiveActivityFeed() {
     }
   }, [lastActivity]);
 
+  const getActivityIcon = (type) => {
+    const icons = {
+      login: "🔐",
+      logout: "👋",
+      page_view: "👁️",
+      click: "🖱️",
+      navigation: "🧭"
+    };
+    return icons[type] || "📌";
+  };
+
+  const formatTime = (timestamp) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = Math.floor((now - date) / 1000);
+    
+    if (diff < 60) return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return date.toLocaleDateString();
+  };
+
   return (
-    <div className="card">
-      <h3>Live Activity</h3>
-      <div className="feed">
-        {items.map((it) => (
-          <div key={it.id} className="feed-item">
-            <div>
-              <div className="type">{it.type}</div>
-              <div className="meta">{it.page || "N/A"} • {new Date(it.occurredAt).toLocaleString()}</div>
+    <Card className="live-activity-feed" padding="lg">
+      <div className="live-activity-feed__header">
+        <h3 className="live-activity-feed__title">
+          <span className="live-pulse" />
+          Live Activity Feed
+        </h3>
+        <Badge variant="primary" size="sm">{items.length} events</Badge>
+      </div>
+      
+      <div className="live-activity-feed__list">
+        {items.map((it, idx) => (
+          <div key={`${it.id}-${idx}`} className="activity-item">
+            <span className="activity-item__icon">{getActivityIcon(it.type)}</span>
+            <div className="activity-item__content">
+              <div className="activity-item__header">
+                <span className="activity-item__type">{it.type.replace('_', ' ')}</span>
+                <span className="activity-item__time">{formatTime(it.occurredAt)}</span>
+              </div>
+              <div className="activity-item__meta">
+                {it.page && <span className="activity-item__page">{it.page}</span>}
+                <div className="activity-item__badges">
+                  {it.device?.deviceType && (
+                    <Badge variant="default" size="sm">{it.device.deviceType}</Badge>
+                  )}
+                  {it.location?.country && (
+                    <Badge variant="default" size="sm">{it.location.country}</Badge>
+                  )}
+                </div>
+              </div>
             </div>
-            <div className="badge">{(it.device?.deviceType || "unknown")} · {(it.location?.country || "unknown")}</div>
           </div>
         ))}
-        {!items.length && <div className="badge">No activity yet</div>}
+        {!items.length && (
+          <div className="activity-item--empty">
+            <span>📭</span>
+            <span>No activity yet</span>
+          </div>
+        )}
       </div>
-    </div>
+    </Card>
   );
 }

@@ -1,0 +1,4 @@
+/* Header styles are primarily in App.css, but component-specific styles go here */
+.header .user {
+  flex-shrink: 0;
+}

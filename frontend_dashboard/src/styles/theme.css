@@ -1,0 +1,133 @@
+/* Violet Dreams Theme - CSS Variables and Tokens */
+
+:root {
+  /* Primary Colors */
+  --primary: #7C3AED;
+  --primary-hover: #6D28D9;
+  --primary-light: rgba(124, 58, 237, 0.1);
+  --primary-gradient: linear-gradient(135deg, #7C3AED 0%, #9333EA 100%);
+  
+  /* Secondary Colors */
+  --secondary: #0D9488;
+  --secondary-hover: #0F766E;
+  --secondary-light: rgba(13, 148, 136, 0.1);
+  --secondary-gradient: linear-gradient(135deg, #0D9488 0%, #14B8A6 100%);
+  
+  /* Status Colors */
+  --success: #0D9488;
+  --success-light: rgba(13, 148, 136, 0.1);
+  --error: #EF4444;
+  --error-light: rgba(239, 68, 68, 0.1);
+  --warning: #F59E0B;
+  --warning-light: rgba(245, 158, 11, 0.1);
+  --info: #3B82F6;
+  --info-light: rgba(59, 130, 246, 0.1);
+  
+  /* Neutral Colors - Light Mode */
+  --bg: #f9fafb;
+  --bg-gradient: linear-gradient(180deg, rgba(124, 58, 237, 0.04) 0%, rgba(249, 250, 251, 1) 100%);
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+  --text: #111827;
+  --text-secondary: #6B7280;
+  --text-muted: #9CA3AF;
+  --border: #E5E7EB;
+  --border-light: #F3F4F6;
+  --divider: rgba(0, 0, 0, 0.06);
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  --shadow-primary: 0 10px 24px rgba(124, 58, 237, 0.25);
+  --shadow-secondary: 0 10px 24px rgba(13, 148, 136, 0.25);
+  
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+  
+  /* Border Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+  
+  /* Typography */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace;
+  
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  
+  /* Z-index layers */
+  --z-base: 0;
+  --z-elevated: 10;
+  --z-sticky: 20;
+  --z-overlay: 30;
+  --z-modal: 40;
+  --z-popover: 50;
+  --z-toast: 60;
+}
+
+/* Dark Theme */
+[data-theme="dark"] {
+  --bg: #0f1115;
+  --bg-gradient: linear-gradient(180deg, rgba(124, 58, 237, 0.08) 0%, rgba(15, 17, 21, 1) 100%);
+  --surface: #1a1d24;
+  --surface-elevated: #22262f;
+  --text: #F9FAFB;
+  --text-secondary: #D1D5DB;
+  --text-muted: #9CA3AF;
+  --border: #2d3139;
+  --border-light: #252931;
+  --divider: rgba(255, 255, 255, 0.08);
+  
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.4);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 10px 10px -5px rgba(0, 0, 0, 0.5);
+  --shadow-primary: 0 10px 24px rgba(124, 58, 237, 0.4);
+  --shadow-secondary: 0 10px 24px rgba(13, 148, 136, 0.4);
+}
+
+/* Global Resets */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Base body styles */
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Focus styles for accessibility */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Selection styles */
+::selection {
+  background-color: var(--primary-light);
+  color: var(--text);
+}

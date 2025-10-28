@@ -1,0 +1,122 @@
+.ui-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  border: none;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  position: relative;
+  white-space: nowrap;
+}
+
+.ui-button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Sizes */
+.ui-button--sm {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.ui-button--md {
+  padding: 10px 16px;
+  font-size: 14px;
+}
+
+.ui-button--lg {
+  padding: 12px 20px;
+  font-size: 15px;
+}
+
+/* Variants */
+.ui-button--primary {
+  background: var(--primary-gradient);
+  color: white;
+  box-shadow: var(--shadow-primary);
+}
+
+.ui-button--primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(124, 58, 237, 0.35);
+}
+
+.ui-button--primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.ui-button--secondary {
+  background: var(--secondary-gradient);
+  color: white;
+  box-shadow: var(--shadow-secondary);
+}
+
+.ui-button--secondary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(13, 148, 136, 0.35);
+}
+
+.ui-button--ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+
+.ui-button--ghost:hover:not(:disabled) {
+  background: var(--surface-elevated);
+  border-color: var(--primary);
+}
+
+.ui-button--danger {
+  background: var(--error);
+  color: white;
+  box-shadow: 0 10px 24px rgba(239, 68, 68, 0.25);
+}
+
+.ui-button--danger:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(239, 68, 68, 0.35);
+}
+
+/* States */
+.ui-button--disabled,
+.ui-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.ui-button--loading {
+  cursor: wait;
+  color: transparent;
+}
+
+.ui-button__spinner {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.ui-button__icon {
+  display: flex;
+  align-items: center;
+  font-size: 1.1em;
+}
+
+.ui-button__text {
+  line-height: 1;
+}
