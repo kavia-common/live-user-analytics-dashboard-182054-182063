@@ -76,11 +76,29 @@ export function createApp() {
     });
   });
 
+  // PUBLIC_INTERFACE
+  app.get('/api/health', (_req: Request, res: Response) => {
+    /**
+     * API health endpoint under /api prefix to align with frontend proxy checks.
+     * Returns 200 OK with environment info.
+     */
+    return res.status(200).json({
+      status: 'ok',
+      env: process.env.NODE_ENV || 'development',
+      time: new Date().toISOString(),
+    });
+  });
+
   // Routes
   app.use('/api/auth', authRoutes);
   app.use('/api/users', usersRoutes);
   app.use('/api/activities', activitiesRoutes);
   app.use('/api/stats', statsRoutes);
+
+  // Ensure unknown /api routes return JSON 404 (not HTML) to avoid XML/HTML parsing issues
+  app.use('/api', (req: Request, res: Response) => {
+    return res.status(404).json({ error: 'Not Found' });
+  });
 
   // Error handler (should be last)
   app.use(errorHandler);
