@@ -5,7 +5,7 @@ import { getEnv } from './config/env.js';
 import { createApp } from './app.js';
 import { initSocket } from './realtime/socket.js';
 import { startChangeStreams } from './realtime/changeStreams.js';
-import { debugLog } from './utils/debug.js';
+import { debugLog, debugError } from './utils/debug.js';
 
 async function bootstrap() {
   const { PORT, CORS_ORIGIN, SOCKET_PATH, NODE_ENV } = getEnv();
@@ -24,17 +24,21 @@ async function bootstrap() {
   const httpServer = http.createServer(app);
   const { channels } = initSocket(httpServer, CORS_ORIGIN, SOCKET_PATH);
 
-  // Connect to MongoDB
-  await connectMongo();
-
-  // Start MongoDB Change Streams emitting to realtime namespace
-  await startChangeStreams(channels.realtimeNamespace);
-
-  // Start server
+  // Start server first so CORS/preflight and health are available even if DB is down
   httpServer.listen(PORT, () => {
     // eslint-disable-next-line no-console
     console.log(`backend_api listening on http://localhost:${PORT}`);
   });
+
+  // Attempt to connect to MongoDB without crashing the server on failure
+  try {
+    await connectMongo();
+    await startChangeStreams(channels.realtimeNamespace);
+    debugLog('server', 'Mongo connected and change streams started');
+  } catch (err) {
+    debugError('server', 'Mongo connection failed; API server remains up for health/CORS', err);
+    // Optionally, retry strategy could be implemented here.
+  }
 }
 
 bootstrap().catch((err) => {

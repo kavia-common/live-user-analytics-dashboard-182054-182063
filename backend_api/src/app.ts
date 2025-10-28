@@ -17,37 +17,42 @@ import { debugLog } from './utils/debug.js';
  * createApp constructs the Express application with routes and middleware.
  */
 export function createApp() {
-  const { CORS_ORIGIN } = getEnv();
+  const { CORS_ORIGIN, NODE_ENV } = getEnv();
 
   const app = express();
 
   // Security and middleware
   app.use(helmet());
-  app.use(
-    cors({
-      origin: (origin, callback) => {
-        // Allow same-origin requests (no origin) and any of the configured origins
-        if (!origin) return callback(null, true);
-        const allowed = Array.isArray(CORS_ORIGIN) ? CORS_ORIGIN : [CORS_ORIGIN as any];
-        if (allowed.includes(origin)) {
-          return callback(null, true);
-        }
-        return callback(new Error(`CORS blocked for origin: ${origin}`));
-      },
-      credentials: true,
-      allowedHeaders: ['Authorization', 'Content-Type'],
-      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      optionsSuccessStatus: 204,
-    })
-  );
-  // Pre-handle OPTIONS for all routes
-  app.options('*', cors());
+
+  // Build allowed origins list with dev-friendly defaults
+  const allowed = Array.isArray(CORS_ORIGIN) ? CORS_ORIGIN : [CORS_ORIGIN as any];
+  const devDefaults = ['http://localhost:3000', 'http://127.0.0.1:3000'];
+  const effectiveAllowed = NODE_ENV === 'production' ? allowed : Array.from(new Set([...allowed, ...devDefaults]));
+
+  const corsOptions: cors.CorsOptions = {
+    origin: (origin, callback) => {
+      // Allow same-origin requests (no origin) and any of the configured origins
+      if (!origin) return callback(null, true);
+      if (effectiveAllowed.includes(origin) || effectiveAllowed.includes('*')) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
+    credentials: true,
+    allowedHeaders: ['Authorization', 'Content-Type'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    optionsSuccessStatus: 204,
+  };
+
+  app.use(cors(corsOptions));
+  // Pre-handle OPTIONS for all routes explicitly with same options
+  app.options('*', cors(corsOptions));
 
   app.use(express.json({ limit: '1mb' }));
   app.use(morgan('dev'));
 
   // Log CORS configuration in non-production for diagnostics
-  debugLog('cors', 'Configured CORS origins', { origins: CORS_ORIGIN });
+  debugLog('cors', 'Configured CORS origins', { origins: effectiveAllowed });
 
   // Basic rate limiter to protect API
   const limiter = rateLimit({
