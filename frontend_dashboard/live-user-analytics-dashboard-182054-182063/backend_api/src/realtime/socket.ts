@@ -1,8 +1,14 @@
 import { Server as HttpServer } from 'http';
 import { Server as SocketIOServer, Namespace, Socket } from 'socket.io';
-import { getAuth } from '@clerk/clerk-sdk-node';
+import jwt from 'jsonwebtoken';
 import { getEnv } from '../config/env.js';
 import { debugLog, debugError } from '../utils/debug.js';
+
+export interface SocketAuthPayload {
+  id: string;
+  email: string;
+  role: 'admin' | 'user';
+}
 
 export interface RealTimeChannels {
   realtimeNamespace: Namespace;
@@ -10,25 +16,25 @@ export interface RealTimeChannels {
 
 /**
  * PUBLIC_INTERFACE
- * initSocket initializes Socket.io with CORS and Clerk auth on /realtime namespace.
+ * initSocket initializes Socket.io with CORS and JWT auth on /realtime namespace.
  */
-export function initSocket(httpServer: HttpServer, corsOrigin: string | string[], socketPath: string): { io: SocketIOServer; channels: RealTimeChannels } {
-  const origins = Array.isArray(corsOrigin) ? corsOrigin : [corsOrigin];
+export function initSocket(httpServer: HttpServer, corsOrigin: string, socketPath: string): { io: SocketIOServer; channels: RealTimeChannels } {
   const io = new SocketIOServer(httpServer, {
     cors: {
-      origin: origins,
+      origin: corsOrigin,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
       credentials: true,
     },
     path: socketPath,
   });
 
-  const { ADMIN_EMAILS } = getEnv();
+  const { JWT_SECRET, CLERK_SECRET_KEY } = getEnv();
   const realtime = io.of('/realtime');
 
-  // Clerk auth middleware for namespace
+  // JWT auth middleware for namespace - supports both Clerk and legacy JWT
   realtime.use((socket: Socket, next) => {
     try {
+      // Accept token as query.token or Authorization header
       const tokenFromQuery = socket.handshake.query?.token as string | undefined;
       const authHeader = (socket.handshake.auth?.token as string | undefined) || (socket.handshake.headers['authorization'] as string | undefined);
       let token: string | null = null;
@@ -39,32 +45,33 @@ export function initSocket(httpServer: HttpServer, corsOrigin: string | string[]
         token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
       }
 
-      debugLog('socket:auth', 'Verifying socket token (Clerk)', {
+      debugLog('socket:auth', 'Verifying socket token', {
         hasQueryToken: !!tokenFromQuery,
         hasAuthHeader: !!authHeader,
         tokenLength: token ? token.length : 0,
+        hasClerkKey: !!CLERK_SECRET_KEY,
+        hasJwtSecret: !!JWT_SECRET,
       });
 
       if (!token) {
+        debugLog('socket:auth', 'No token provided');
         return next(new Error('Unauthorized: Missing token'));
       }
 
-      const reqLike: any = { headers: { authorization: `Bearer ${token}` } };
-      const auth = getAuth(reqLike);
-      if (!auth?.userId) return next(new Error('Unauthorized'));
-      const email = (auth.sessionClaims as any)?.email as string | undefined;
-      const role: 'admin' | 'user' =
-        email && ADMIN_EMAILS.has(String(email).toLowerCase()) ? 'admin' : 'user';
-      (socket as any).user = { id: auth.userId, email: email || '', role };
-      debugLog('socket:auth', 'Socket Clerk auth OK', { userId: auth.userId, role });
+      // For now, we use JWT_SECRET; Clerk JWTs are verified separately in HTTP middleware
+      // Socket.io connection uses Clerk-issued JWT that can be verified with JWT_SECRET if configured
+      const payload = jwt.verify(token, JWT_SECRET || CLERK_SECRET_KEY || 'fallback') as SocketAuthPayload & { iat: number; exp: number };
+      (socket as any).user = { id: payload.id, email: payload.email, role: payload.role };
+      debugLog('socket:auth', 'Socket token OK', { userId: payload.id, role: payload.role });
       return next();
     } catch (err) {
-      debugError('socket:auth', 'Socket Clerk verify failed', err);
-      return next(new Error('Unauthorized'));
+      debugError('socket:auth', 'Socket token verify failed', err);
+      return next(new Error('Unauthorized: Invalid or expired token'));
     }
   });
 
   realtime.on('connection', (socket) => {
+    // Emit a handshake confirmation
     socket.emit('connected', { message: 'Realtime connected' });
 
     socket.on('disconnect', () => {

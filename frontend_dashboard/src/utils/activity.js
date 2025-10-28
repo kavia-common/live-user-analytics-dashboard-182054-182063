@@ -12,12 +12,20 @@ import { api } from "../api/client";
  */
 export async function postActivity(payload) {
   try {
-    await api.post("/activities/activity", payload);
+    if (process.env.NODE_ENV !== "production") {
+      // eslint-disable-next-line no-console
+      console.log("[activity] 📤 Posting activity:", payload.type, payload.page);
+    }
+    const response = await api.post("/activities", payload);
+    if (process.env.NODE_ENV !== "production") {
+      // eslint-disable-next-line no-console
+      console.log("[activity] ✓ Activity posted:", response.status);
+    }
   } catch (err) {
     // Silently fail in production; log in dev
     if (process.env.NODE_ENV !== "production") {
       // eslint-disable-next-line no-console
-      console.debug("[activity] Failed to post activity:", err);
+      console.error("[activity] ✗ Failed to post activity:", err?.response?.status, err?.response?.data?.error || err?.message);
     }
   }
 }

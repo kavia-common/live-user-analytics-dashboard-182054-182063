@@ -46,18 +46,34 @@ export function useSocket() {
       });
       socketRef.current = s;
 
-      s.on("connect", () => setConnected(true));
-      s.on("disconnect", () => setConnected(false));
+      s.on("connect", () => {
+        // eslint-disable-next-line no-console
+        console.log("[socket] ✓ Connected to realtime namespace");
+        setConnected(true);
+      });
+      s.on("disconnect", () => {
+        // eslint-disable-next-line no-console
+        console.log("[socket] ✗ Disconnected from realtime");
+        setConnected(false);
+      });
       s.on("connected", () => {
         // eslint-disable-next-line no-console
-        console.debug("[socket] connected");
+        console.log("[socket] ✓ Handshake confirmed");
+      });
+      s.on("connect_error", (err) => {
+        // eslint-disable-next-line no-console
+        console.error("[socket] Connection error:", err.message);
       });
 
       s.on("activity:new", (payload) => {
+        // eslint-disable-next-line no-console
+        console.log("[socket] 📥 Activity received:", payload?.type);
         setLastActivity(payload);
       });
 
       s.on("stats:update", (payload) => {
+        // eslint-disable-next-line no-console
+        console.log("[socket] 📊 Stats update received");
         // Payload can be minimal (backward compat) or comprehensive with nested structure
         setLastStats(payload);
       });

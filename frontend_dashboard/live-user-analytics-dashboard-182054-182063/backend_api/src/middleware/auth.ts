@@ -56,6 +56,12 @@ export function legacyJwtAuthMiddleware(req: Request, res: Response, next: NextF
 
 /**
  * PUBLIC_INTERFACE
+ * legacyJwtAuthMiddleware is an alias for authMiddleware (for backward compatibility)
+ */
+export const legacyJwtAuthMiddleware = authMiddleware;
+
+/**
+ * PUBLIC_INTERFACE
  * requireRole ensures the authenticated user has one of the allowed roles
  */
 export function requireRole(...roles: Array<'admin' | 'user'>) {

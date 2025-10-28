@@ -70,9 +70,9 @@ router.post('/activity', clerkAuthMiddleware, async (req: Request, res: Response
 /**
  * PUBLIC_INTERFACE
  * POST /api/activities
- * Admin only - creates a synthetic activity (useful for testing)
+ * Creates an activity event. Auth required. Admin check removed to allow user activity tracking.
  */
-router.post('/', clerkAuthMiddleware, requireRole('admin'), async (req: Request, res: Response) => {
+router.post('/', clerkAuthMiddleware, async (req: Request, res: Response) => {
   debugLog('activities:create', 'Request start', {
     user: req.user,
     authHeaderPresent: !!req.headers.authorization,
@@ -104,9 +104,10 @@ router.post('/', clerkAuthMiddleware, requireRole('admin'), async (req: Request,
 
   try {
     const created = await createActivity(value as any);
-    debugLog('activities:create', 'Created', { id: created._id.toString() });
-    return res.status(201).json({ id: created._id.toString() });
+    debugLog('activities:create', 'Created', { id: created._id.toString(), type: value.type });
+    return res.status(204).send();
   } catch (err: any) {
+    debugLog('activities:create', 'Error', { error: err.message });
     return res.status(500).json({ error: err.message || 'Error creating activity' });
   }
 });

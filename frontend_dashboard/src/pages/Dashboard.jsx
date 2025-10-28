@@ -5,6 +5,8 @@ import LineChart from "../components/charts/LineChart";
 import BarChart from "../components/charts/BarChart";
 import PieChart from "../components/charts/PieChart";
 import LiveActivityFeed from "../components/LiveActivityFeed";
+import EmptyState from "../components/EmptyState";
+import DebugBanner from "../components/DebugBanner";
 import { useSocket } from "../hooks/useSocket";
 import { trackPageView } from "../utils/activity";
 import "./Dashboard.css";
@@ -17,10 +19,12 @@ export default function Dashboard() {
   const [devices, setDevices] = useState([]);
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(null);
   const { lastStats } = useSocket();
 
   const fetchAll = async () => {
     setLoading(true);
+    setFetchError(null);
     try {
       const [ov, ts, dev, loc] = await Promise.all([
         api.get("/stats/overview?sinceMinutes=60"),
@@ -32,8 +36,11 @@ export default function Dashboard() {
       setSeries(ts.data.series || []);
       setDevices(dev.data.devices || []);
       setLocations(loc.data.locations || []);
+      // eslint-disable-next-line no-console
+      console.log("[Dashboard] Data fetched:", { overview: ov.data, seriesCount: ts.data.series?.length });
     } catch (err) {
-      console.error("Failed to fetch dashboard data:", err);
+      console.error("[Dashboard] Failed to fetch dashboard data:", err?.response?.status, err?.message);
+      setFetchError(err?.response?.status === 401 ? "Authentication required" : "Failed to load data");
     } finally {
       setLoading(false);
     }
@@ -49,6 +56,8 @@ export default function Dashboard() {
   // Live comprehensive updates from socket
   useEffect(() => {
     if (lastStats) {
+      // eslint-disable-next-line no-console
+      console.log("[Dashboard] Socket stats update received:", lastStats);
       // If lastStats contains full data structure, update all
       if (lastStats.overview) {
         setOverview(lastStats.overview);
@@ -71,6 +80,7 @@ export default function Dashboard() {
   if (loading) {
     return (
       <div className="dashboard">
+        <DebugBanner />
         <div className="dashboard__loading">
           <span className="dashboard__spinner" />
           <span>Loading dashboard data...</span>
@@ -79,8 +89,21 @@ export default function Dashboard() {
     );
   }
 
+  // Check if we have empty data
+  const isEmpty = overview.eventsCount === 0 && series.length === 0 && devices.length === 0;
+
+  if (isEmpty && !fetchError) {
+    return (
+      <div className="dashboard">
+        <DebugBanner />
+        <EmptyState onDataSeeded={fetchAll} />
+      </div>
+    );
+  }
+
   return (
     <div className="dashboard">
+      <DebugBanner />
       <header className="dashboard__header">
         <h1 className="dashboard__title">Dashboard</h1>
         <p className="dashboard__subtitle">Real-time analytics overview</p>

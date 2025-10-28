@@ -8,6 +8,8 @@ import authRoutes from './routes/auth.js';
 import usersRoutes from './routes/users.js';
 import activitiesRoutes from './routes/activities.js';
 import statsRoutes from './routes/stats.js';
+import analyticsRoutes from './routes/analytics.js';
+import e2eRoutes from './routes/e2e.js';
 import { errorHandler } from './middleware/error.js';
 import { getEnv } from './config/env.js';
 import { debugLog } from './utils/debug.js';
@@ -27,8 +29,7 @@ export function createApp() {
   // Build allowed origins list with dev-friendly defaults
   const allowed = Array.isArray(CORS_ORIGIN) ? CORS_ORIGIN : [CORS_ORIGIN as any];
   const devDefaults = ['http://localhost:3000', 'http://127.0.0.1:3000'];
-  const effectiveAllowed =
-    NODE_ENV === 'production' ? allowed : Array.from(new Set([...allowed, ...devDefaults]));
+  const effectiveAllowed = NODE_ENV === 'production' ? allowed : Array.from(new Set([...allowed, ...devDefaults]));
 
   const corsOptions: cors.CorsOptions = {
     origin: (origin, callback) => {
@@ -95,6 +96,21 @@ export function createApp() {
   app.use('/api/users', usersRoutes);
   app.use('/api/activities', activitiesRoutes);
   app.use('/api/stats', statsRoutes);
+  app.use('/api/analytics', analyticsRoutes);
+  // Minimal E2E routes for health and dev-only auth isolation
+  app.use('/api/e2e', e2eRoutes);
+
+  // Ensure unknown /api routes return JSON 404 (not HTML) to avoid XML/HTML parsing issues
+  app.use('/api', (req: Request, res: Response) => {
+    res.type('application/json');
+    return res.status(404).json({ error: 'Not Found' });
+  });
+
+  // For any non-API unknown route, also return JSON (prevents HTML default)
+  app.use((req: Request, res: Response) => {
+    res.type('application/json');
+    return res.status(404).json({ error: 'Not Found' });
+  });
 
   // Error handler (should be last)
   app.use(errorHandler);

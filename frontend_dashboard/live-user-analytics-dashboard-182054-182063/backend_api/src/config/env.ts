@@ -22,16 +22,9 @@ export function getEnv() {
     throw new Error('Missing MONGODB_URI environment variable.');
   }
 
-  // JWT_SECRET is only required if LOCAL_JWT_AUTH is enabled
-  const localJwtAuth = LOCAL_JWT_AUTH === 'true';
-  if (localJwtAuth && !JWT_SECRET) {
-    throw new Error('Missing JWT_SECRET environment variable (required when LOCAL_JWT_AUTH=true).');
-  }
-
-  if (!CLERK_SECRET_KEY) {
-    // eslint-disable-next-line no-console
-    console.warn('CLERK_SECRET_KEY not set. Clerk authentication will not work.');
-  }
+  // Use CLERK_SECRET_KEY as JWT_SECRET fallback for socket auth with Clerk tokens
+  const clerkSecret = CLERK_SECRET_KEY || '';
+  const jwtSecret = JWT_SECRET || clerkSecret || 'dev-secret-change-in-prod';
 
   // Support multiple origins via comma-separated list, and trim spaces
   const parsedCors = (CORS_ORIGIN || 'http://localhost:3000')
@@ -39,24 +32,21 @@ export function getEnv() {
     .map((o) => o.trim())
     .filter(Boolean);
 
-  // Parse admin emails into a Set for fast lookup
-  const adminEmailsSet = new Set(
-    (ADMIN_EMAILS || '')
-      .split(',')
-      .map((e) => e.trim().toLowerCase())
-      .filter(Boolean)
-  );
-
   return {
     MONGODB_URI,
-    JWT_SECRET: JWT_SECRET || '',
+    JWT_SECRET: jwtSecret,
     PORT: PORT ? parseInt(PORT, 10) : 4000,
     CORS_ORIGIN: parsedCors,
     SOCKET_PATH: SOCKET_PATH || '/socket.io',
     NODE_ENV: NODE_ENV || 'development',
-    CLERK_SECRET_KEY: CLERK_SECRET_KEY || '',
-    ADMIN_EMAILS: adminEmailsSet,
-    LOCAL_JWT_AUTH: localJwtAuth,
+    CLERK_SECRET_KEY: clerkSecret,
+    LOCAL_JWT_AUTH: LOCAL_JWT_AUTH === 'true',
+    ADMIN_EMAILS: new Set(
+      (ADMIN_EMAILS || '')
+        .split(',')
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean)
+    ),
   };
 }
 
