@@ -1,77 +1,26 @@
 import 'dotenv/config';
-import express, { Request, Response } from 'express';
 import http from 'http';
-import cors from 'cors';
-import helmet from 'helmet';
-import morgan from 'morgan';
-import rateLimit from 'express-rate-limit';
-import { Server as SocketIOServer } from 'socket.io';
-
 import { connectMongo } from './db/mongoose.js';
-
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 4000;
-const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
-const SOCKET_PATH = process.env.SOCKET_PATH || '/socket.io';
+import { getEnv } from './config/env.js';
+import { createApp } from './app.js';
+import { initSocket } from './realtime/socket.js';
+import { startChangeStreams } from './realtime/changeStreams.js';
 
 async function bootstrap() {
-  // Create Express app
-  const app = express();
+  const { PORT, CORS_ORIGIN, SOCKET_PATH } = getEnv();
 
-  // Security and middleware
-  app.use(helmet());
-  app.use(
-    cors({
-      origin: CORS_ORIGIN,
-      credentials: true,
-    })
-  );
-  app.use(express.json({ limit: '1mb' }));
-  app.use(morgan('dev'));
+  // Build Express app
+  const app = createApp();
 
-  // Basic rate limiter to protect API
-  const limiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: 120,
-    standardHeaders: true,
-    legacyHeaders: false,
-  });
-  app.use('/api', limiter);
-
-  // Health check
-  // PUBLIC_INTERFACE
-  app.get('/health', (_req: Request, res: Response) => {
-    /**
-     * This endpoint checks if the API server is running.
-     * Returns 200 and basic status info.
-     */
-    return res.status(200).json({
-      status: 'ok',
-      env: process.env.NODE_ENV || 'development',
-      time: new Date().toISOString(),
-    });
-  });
-
-  // Create HTTP server and Socket.io
+  // Create HTTP server, init Socket.io with JWT auth
   const httpServer = http.createServer(app);
-  const io = new SocketIOServer(httpServer, {
-    cors: {
-      origin: CORS_ORIGIN,
-      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-      credentials: true,
-    },
-    path: SOCKET_PATH,
-  });
-
-  io.on('connection', (socket) => {
-    // Socket connected
-    socket.emit('connected', { message: 'Socket connected' });
-    socket.on('disconnect', () => {
-      // Socket disconnected
-    });
-  });
+  const { channels } = initSocket(httpServer, CORS_ORIGIN, SOCKET_PATH);
 
   // Connect to MongoDB
   await connectMongo();
+
+  // Start MongoDB Change Streams emitting to realtime namespace
+  await startChangeStreams(channels.realtimeNamespace);
 
   // Start server
   httpServer.listen(PORT, () => {
