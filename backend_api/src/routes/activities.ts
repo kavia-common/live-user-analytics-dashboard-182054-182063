@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import Joi from 'joi';
-import { authMiddleware, requireRole } from '../middleware/auth.js';
+import { requireRole } from '../middleware/auth.js';
+import { clerkAuthMiddleware } from '../middleware/clerkAuth.js';
 import { createActivity, listRecentActivities } from '../services/activityService.js';
 import { debugLog } from '../utils/debug.js';
 
@@ -11,7 +12,7 @@ const router = Router();
  * GET /api/activities/recent?limit=50
  * Auth required - returns recent activity events
  */
-router.get('/recent', authMiddleware, async (req: Request, res: Response) => {
+router.get('/recent', clerkAuthMiddleware, async (req: Request, res: Response) => {
   debugLog('activities:recent', 'Request start', {
     user: req.user,
     authHeaderPresent: !!req.headers.authorization,
@@ -27,7 +28,7 @@ router.get('/recent', authMiddleware, async (req: Request, res: Response) => {
  * POST /api/activities
  * Admin only - creates a synthetic activity (useful for testing)
  */
-router.post('/', authMiddleware, requireRole('admin'), async (req: Request, res: Response) => {
+router.post('/', clerkAuthMiddleware, requireRole('admin'), async (req: Request, res: Response) => {
   debugLog('activities:create', 'Request start', {
     user: req.user,
     authHeaderPresent: !!req.headers.authorization,

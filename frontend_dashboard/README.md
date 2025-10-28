@@ -31,6 +31,10 @@ Environment variables:
 - Publishable Key → set REACT_APP_CLERK_PUBLISHABLE_KEY in frontend
 - Secret Key → set CLERK_SECRET_KEY in backend
 
+Ensure both keys come from the SAME Clerk instance (matching environment). If your app is behind a proxy/custom domain (e.g., Vercel previews), set REACT_APP_CLERK_PROXY_URL to a path (e.g., `/clerk`) and configure your proxy accordingly to avoid `getToken 404` from accounts.dev.
+
+- Token retrieval uses `getToken({ template: "default" })`. If you use a custom template in Clerk, ensure the backend accepts that token accordingly.
+
 2) In Clerk dashboard, add redirect URLs for:
 - http://localhost:3000/sign-in
 - http://localhost:3000/sign-up

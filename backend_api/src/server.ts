@@ -25,9 +25,9 @@ async function bootstrap() {
   const { channels } = initSocket(httpServer, CORS_ORIGIN, SOCKET_PATH);
 
   // Start server first so CORS/preflight and health are available even if DB is down
-  httpServer.listen(PORT, () => {
+  httpServer.listen(PORT, '0.0.0.0', () => {
     // eslint-disable-next-line no-console
-    console.log(`backend_api listening on http://localhost:${PORT}`);
+    console.log(`backend_api listening on http://0.0.0.0:${PORT}`);
   });
 
   // Attempt to connect to MongoDB without crashing the server on failure

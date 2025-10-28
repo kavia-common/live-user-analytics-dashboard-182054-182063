@@ -1,8 +1,10 @@
 import { Router, Request, Response } from 'express';
 import Joi from 'joi';
-import { authMiddleware } from '../middleware/auth.js';
+import { clerkAuthMiddleware } from '../middleware/clerkAuth.js';
+import { legacyJwtAuthMiddleware } from '../middleware/auth.js';
 import { login, signup } from '../services/authService.js';
 import { debugLog, debugError, logMongoStatus } from '../utils/debug.js';
+import { getEnv } from '../config/env.js';
 
 const router = Router();
 
@@ -19,15 +21,21 @@ router.options('*', (req: Request, res: Response) => {
   return res.sendStatus(204);
 });
 
+// Support optional legacy local auth (dev only)
+const { LOCAL_JWT_AUTH } = getEnv();
+
 /**
  * PUBLIC_INTERFACE
  * POST /api/auth/signup
  * Body: { email, password, name?, role? }
  * Returns: { token, user }
+ * Enabled only when LOCAL_JWT_AUTH=true, otherwise 404.
  */
 router.post('/signup', async (req: Request, res: Response) => {
-  // Always return JSON from this router
   res.set('Content-Type', 'application/json');
+  if (!LOCAL_JWT_AUTH) {
+    return res.status(404).json({ error: 'Not Found' });
+  }
 
   debugLog('auth:signup', 'Incoming request', {
     method: req.method,
@@ -65,7 +73,6 @@ router.post('/signup', async (req: Request, res: Response) => {
     });
     return res.status(201).json(result);
   } catch (err: any) {
-    // Duplicate key error (e.g., email unique)
     if (err?.code === 11000 || /E11000/i.test(String(err?.message))) {
       debugError('auth:signup', 'Duplicate email detected', err, { email: value?.email });
       return res.status(400).json({ error: 'Email already in use' });
@@ -81,57 +88,14 @@ router.post('/signup', async (req: Request, res: Response) => {
 
 /**
  * PUBLIC_INTERFACE
- * POST /api/auth/register
- * Alias of signup for frontend compatibility.
- */
-router.post('/register', async (req: Request, res: Response) => {
-  res.set('Content-Type', 'application/json');
-
-  debugLog('auth:register', 'Alias invoked → forwarding to signup handler');
-  const schema = Joi.object({
-    email: Joi.string().email().required(),
-    password: Joi.string().min(6).required(),
-    name: Joi.string().optional(),
-    role: Joi.string().valid('admin', 'user').optional(),
-  });
-  const { error, value } = schema.validate(req.body);
-  debugLog('auth:register', 'Validation result', {
-    valid: !error,
-    email: value?.email,
-    name: value?.name,
-    role: value?.role,
-    passwordLength: value?.password ? String(value.password).length : undefined,
-  });
-  if (error) {
-    return res.status(400).json({ error: error.message });
-  }
-  logMongoStatus('auth:register');
-  try {
-    const result = await signup(value);
-    debugLog('auth:register', 'Register success', {
-      userId: result.user?.id,
-      tokenLength: result.token?.length,
-      status: 201,
-    });
-    return res.status(201).json(result);
-  } catch (err: any) {
-    if (err?.code === 11000 || /E11000/i.test(String(err?.message))) {
-      debugError('auth:register', 'Duplicate email detected', err, { email: value?.email });
-      return res.status(400).json({ error: 'Email already in use' });
-    }
-    debugError('auth:register', 'Register failed', err, { email: value?.email });
-    return res.status(err?.statusCode || 500).json({ error: err?.message || 'Error creating user' });
-  }
-});
-
-/**
- * PUBLIC_INTERFACE
  * POST /api/auth/login
- * Body: { email, password }
- * Returns: { token, user }
+ * Local login only when LOCAL_JWT_AUTH=true.
  */
 router.post('/login', async (req: Request, res: Response) => {
   res.set('Content-Type', 'application/json');
+  if (!LOCAL_JWT_AUTH) {
+    return res.status(404).json({ error: 'Not Found' });
+  }
 
   debugLog('auth:login', 'Incoming request', {
     method: req.method,
@@ -172,13 +136,11 @@ router.post('/login', async (req: Request, res: Response) => {
 /**
  * PUBLIC_INTERFACE
  * GET /api/auth/me
- * Header: Authorization: Bearer <token>
- * Returns: { user } current user from JWT (derived from token, not DB lookup)
+ * Returns current user derived from Clerk token and ADMIN_EMAILS mapping.
  */
-router.get('/me', authMiddleware, async (req: Request, res: Response) => {
+router.get('/me', clerkAuthMiddleware, async (req: Request, res: Response) => {
   res.set('Content-Type', 'application/json');
-
-  debugLog('auth:me', 'JWT verified via middleware', {
+  debugLog('auth:me', 'Clerk verified via middleware', {
     path: req.path,
     hasAuthHeader: !!req.headers.authorization,
     authHeaderPrefix: (req.headers.authorization || '').split(' ')[0] || '',

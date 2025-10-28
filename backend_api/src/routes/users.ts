@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import Joi from 'joi';
-import { authMiddleware, requireRole } from '../middleware/auth.js';
+import { requireRole } from '../middleware/auth.js';
+import { clerkAuthMiddleware } from '../middleware/clerkAuth.js';
 import { listUsers, updateUserRole } from '../services/userService.js';
 
 const router = Router();
@@ -10,7 +11,7 @@ const router = Router();
  * GET /api/users
  * Admin only - list users with pagination
  */
-router.get('/', authMiddleware, requireRole('admin'), async (req: Request, res: Response) => {
+router.get('/', clerkAuthMiddleware, requireRole('admin'), async (req: Request, res: Response) => {
   const page = parseInt((req.query.page as string) || '1', 10);
   const limit = parseInt((req.query.limit as string) || '20', 10);
   const result = await listUsers(page, limit);
@@ -22,7 +23,7 @@ router.get('/', authMiddleware, requireRole('admin'), async (req: Request, res: 
  * PATCH /api/users/:id/role
  * Admin only - update user role
  */
-router.patch('/:id/role', authMiddleware, requireRole('admin'), async (req: Request, res: Response) => {
+router.patch('/:id/role', clerkAuthMiddleware, requireRole('admin'), async (req: Request, res: Response) => {
   const schema = Joi.object({
     role: Joi.string().valid('admin', 'user').required(),
   });

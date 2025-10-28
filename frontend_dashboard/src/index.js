@@ -7,6 +7,8 @@ import { BrowserRouter } from 'react-router-dom';
 
 // Wrap app with ClerkProvider using publishable key from env
 const PUBLISHABLE_KEY = process.env.REACT_APP_CLERK_PUBLISHABLE_KEY;
+const CLERK_PROXY_URL = process.env.REACT_APP_CLERK_PROXY_URL || undefined;
+// Optional Clerk appearance or domain could be set via env without hardcoding
 
 if (!PUBLISHABLE_KEY) {
   // eslint-disable-next-line no-console
@@ -17,6 +19,7 @@ const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <ClerkProvider
     publishableKey={PUBLISHABLE_KEY}
+    proxyUrl={CLERK_PROXY_URL}
     navigate={(to) => {
       try {
         // Centralized navigation for Clerk hosted components.
