@@ -1,82 +1,55 @@
-# Lightweight React Template for KAVIA
+# Frontend Dashboard (React)
 
-This project provides a minimal React template with a clean, modern UI and minimal dependencies.
+A modern, responsive, real-time User Analytics Dashboard UI implementing the Violet Dreams theme.
 
 ## Features
 
-- **Lightweight**: No heavy UI frameworks - uses only vanilla CSS and React
-- **Modern UI**: Clean, responsive design with KAVIA brand styling
-- **Fast**: Minimal dependencies for quick loading times
-- **Simple**: Easy to understand and modify
+- React Router v6: Dashboard, Users (admin only), Settings, Login
+- AuthContext with JWT, persisted in localStorage
+- Axios API client with request/response interceptors
+- Socket.io client hook for realtime updates (/realtime namespace with JWT)
+- Charts via Recharts (line, bar, pie)
+- Live activity feed, stat cards, and responsive layout with sidebar + header
+- Dark mode with persistence and theme variables
+
+## Environment
+
+Copy `.env.example` to `.env` and set values:
+
+- `REACT_APP_API_URL=http://localhost:4000`
+- `REACT_APP_SOCKET_URL=http://localhost:4000` (optional; defaults to API URL)
 
 ## Getting Started
 
-In the project directory, you can run:
+1. Install dependencies:
 
-### `npm start`
-
-Runs the app in development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
-
-### `npm test`
-
-Launches the test runner in interactive watch mode.
-
-### `npm run build`
-
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
-
-## Customization
-
-### Colors
-
-The main brand colors are defined as CSS variables in `src/App.css`:
-
-```css
-:root {
-  --kavia-orange: #E87A41;
-  --kavia-dark: #1A1A1A;
-  --text-color: #ffffff;
-  --text-secondary: rgba(255, 255, 255, 0.7);
-  --border-color: rgba(255, 255, 255, 0.1);
-}
+```bash
+npm install
 ```
 
-### Components
+2. Start dev server:
 
-This template uses pure HTML/CSS components instead of a UI framework. You can find component styles in `src/App.css`. 
+```bash
+npm start
+```
 
-Common components include:
-- Buttons (`.btn`, `.btn-large`)
-- Container (`.container`)
-- Navigation (`.navbar`)
-- Typography (`.title`, `.subtitle`, `.description`)
+Open http://localhost:3000
 
-## Learn More
+3. Build for production:
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+```bash
+npm run build
+```
 
-### Code Splitting
+## Pages
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+- Login: Email/password login or quick signup (glassmorphism design)
+- Dashboard: KPIs, timeseries, devices/locations charts, and live feed
+- Users: Admin-only user list and role updates
+- Settings: Profile summary and theme toggle
 
-### Analyzing the Bundle Size
+## Notes
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+- All non-auth API requests require JWT bearer token.
+- Socket.io connects to `/realtime` namespace using the JWT during handshake.
+- Users page is protected with role-based guard (admin).
