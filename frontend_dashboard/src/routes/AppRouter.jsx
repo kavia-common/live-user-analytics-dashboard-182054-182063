@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
@@ -72,7 +72,7 @@ export default function AppRouter() {
   }, [isAuthenticated, isLoaded, loading, navigate]);
 
   return (
-    <BrowserRouter>
+    <>
       <DebugRedirectLogger label="root" />
       <Routes>
         <Route
@@ -86,6 +86,7 @@ export default function AppRouter() {
                     path="/sign-in"
                     redirectUrl="/"
                     afterSignInUrl="/"
+                    signUpUrl="/sign-up"
                   />
                 </div>
               </div>
@@ -103,6 +104,7 @@ export default function AppRouter() {
                     path="/sign-up"
                     redirectUrl="/"
                     afterSignUpUrl="/"
+                    signInUrl="/sign-in"
                   />
                 </div>
               </div>
@@ -151,6 +153,6 @@ export default function AppRouter() {
         {/* Global fallback for any protected path when signed out */}
         <RedirectToSignIn />
       </SignedOut>
-    </BrowserRouter>
+    </>
   );
 }

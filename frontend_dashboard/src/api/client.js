@@ -26,7 +26,7 @@ api.interceptors.request.use(async (config) => {
         config.headers = config.headers || {};
         config.headers.Authorization = `Bearer ${token}`;
         // eslint-disable-next-line no-console
-        console.debug("[api] Attached Authorization header");
+        console.debug("[api] Attached Authorization header to", config.url);
       } else {
         // eslint-disable-next-line no-console
         console.debug("[api] No token available");

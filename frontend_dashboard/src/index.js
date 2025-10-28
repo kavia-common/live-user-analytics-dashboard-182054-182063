@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import { ClerkProvider } from '@clerk/clerk-react';
+import { BrowserRouter } from 'react-router-dom';
 
 // Wrap app with ClerkProvider using publishable key from env
 const PUBLISHABLE_KEY = process.env.REACT_APP_CLERK_PUBLISHABLE_KEY;
@@ -18,7 +19,8 @@ root.render(
     publishableKey={PUBLISHABLE_KEY}
     navigate={(to) => {
       try {
-        // Centralized navigation for Clerk hosted components
+        // Centralized navigation for Clerk hosted components.
+        // Prefer Router-aware method by dispatching a popstate after pushState.
         window.history.pushState(null, '', to);
         window.dispatchEvent(new PopStateEvent('popstate'));
       } catch (e) {
@@ -27,7 +29,12 @@ root.render(
         window.location.replace(to);
       }
     }}
+    // After sign in/sign up, Clerk will route to dashboard (root path).
+    afterSignInUrl="/"
+    afterSignUpUrl="/"
   >
-    <App />
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
   </ClerkProvider>
 );

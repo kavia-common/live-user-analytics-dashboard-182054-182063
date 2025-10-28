@@ -54,6 +54,10 @@ export function AuthProvider({ children }) {
       }
       setFetchingRole(true);
       try {
+        // Ensure Clerk is loaded before calling backend
+        const tokenCheck = await tokenProviderRef.current?.();
+        // eslint-disable-next-line no-console
+        console.debug("[AuthProvider] Clerk loaded:", { clerkAuthLoaded, clerkUserLoaded, hasToken: !!tokenCheck });
         const { data } = await api.get("/auth/me");
         // eslint-disable-next-line no-console
         console.debug("[AuthProvider] /api/auth/me ->", data);
