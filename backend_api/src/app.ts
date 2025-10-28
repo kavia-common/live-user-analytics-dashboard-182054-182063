@@ -8,6 +8,7 @@ import authRoutes from './routes/auth.js';
 import usersRoutes from './routes/users.js';
 import activitiesRoutes from './routes/activities.js';
 import statsRoutes from './routes/stats.js';
+import e2eRoutes from './routes/e2e.js';
 import { errorHandler } from './middleware/error.js';
 import { getEnv } from './config/env.js';
 import { debugLog } from './utils/debug.js';
@@ -94,6 +95,8 @@ export function createApp() {
   app.use('/api/users', usersRoutes);
   app.use('/api/activities', activitiesRoutes);
   app.use('/api/stats', statsRoutes);
+  // Minimal E2E routes for health and dev-only auth isolation
+  app.use('/api/e2e', e2eRoutes);
 
   // Ensure unknown /api routes return JSON 404 (not HTML) to avoid XML/HTML parsing issues
   app.use('/api', (req: Request, res: Response) => {

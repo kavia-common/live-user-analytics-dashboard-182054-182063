@@ -41,6 +41,11 @@ CORS_ORIGIN must match your frontend origin exactly (including protocol). For Ve
 
    Server runs at `http://localhost:4000`.
    - Health: `GET /health`
+   - E2E sanity endpoints:
+     - `GET /api/e2e/health` → 200 JSON
+     - DEV-only (NODE_ENV=development):
+       - `POST /api/e2e/dev/signup` with unique email → 201 JSON { token, user }
+       - `POST /api/e2e/dev/login` → 200 JSON { token, user }
 
 3. Build and start (production-like):
 

@@ -46,7 +46,10 @@ WebSocket notes:
 - When running `npm start` in `frontend_dashboard` and the backend is running on port 4000, all requests to:
   - `/api/*` will be proxied to the backend.
   - `/socket.io/*` (websocket) will also be proxied to the backend.
-- Verify with: `curl http://localhost:3000/api/health` → should return `{ status: "ok", ... }`.
+- Proxy preserves JSON semantics and does not transform request/response bodies. POST/PUT are forwarded correctly.
+- Verify with:
+  - `curl -i http://localhost:3000/api/health` → 200 JSON
+  - `curl -i -X POST http://localhost:3000/api/auth/signup -H 'Content-Type: application/json' -d '{"email":"u1@example.com","password":"secret123"}'`
 
 To use split-host for local development without relying on the proxy, create a `.env` file:
 
