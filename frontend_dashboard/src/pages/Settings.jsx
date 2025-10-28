@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import { trackPageView } from "../utils/activity";
 import { applyTheme, getStoredTheme, storeTheme } from "../utils/theme";
 import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
@@ -16,6 +17,11 @@ export default function Settings() {
     applyTheme(mode);
     storeTheme(mode);
   }, [mode]);
+
+  useEffect(() => {
+    // Track page view on mount
+    trackPageView("/settings");
+  }, []);
 
   const toggleTheme = () => {
     setMode(prev => prev === "light" ? "dark" : "light");

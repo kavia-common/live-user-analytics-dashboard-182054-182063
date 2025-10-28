@@ -6,6 +6,7 @@ import BarChart from "../components/charts/BarChart";
 import PieChart from "../components/charts/PieChart";
 import LiveActivityFeed from "../components/LiveActivityFeed";
 import { useSocket } from "../hooks/useSocket";
+import { trackPageView } from "../utils/activity";
 import "./Dashboard.css";
 
 // PUBLIC_INTERFACE
@@ -40,13 +41,30 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchAll();
+    // Track page view on mount
+    trackPageView("/");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Live minimal updates from socket
+  // Live comprehensive updates from socket
   useEffect(() => {
     if (lastStats) {
-      setOverview((o) => ({ ...o, ...lastStats }));
+      // If lastStats contains full data structure, update all
+      if (lastStats.overview) {
+        setOverview(lastStats.overview);
+      } else {
+        // Backward compatibility: minimal overview update
+        setOverview((o) => ({ ...o, ...lastStats }));
+      }
+      if (lastStats.timeseries) {
+        setSeries(lastStats.timeseries);
+      }
+      if (lastStats.devices) {
+        setDevices(lastStats.devices);
+      }
+      if (lastStats.locations) {
+        setLocations(lastStats.locations);
+      }
     }
   }, [lastStats]);
 

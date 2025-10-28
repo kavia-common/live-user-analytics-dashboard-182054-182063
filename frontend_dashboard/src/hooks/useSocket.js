@@ -58,6 +58,7 @@ export function useSocket() {
       });
 
       s.on("stats:update", (payload) => {
+        // Payload can be minimal (backward compat) or comprehensive with nested structure
         setLastStats(payload);
       });
     })();

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
+import { trackPageView } from "../utils/activity";
 import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
 import Button from "../components/ui/Button";
@@ -27,6 +28,8 @@ export default function Users() {
 
   useEffect(() => {
     if (isAdmin) fetchUsers();
+    // Track page view
+    trackPageView("/users");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
 

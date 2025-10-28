@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { getAuth } from '@clerk/clerk-sdk-node';
+import { clerkClient } from '@clerk/clerk-sdk-node';
 import { getEnv } from '../config/env.js';
 import { debugError, debugLog } from '../utils/debug.js';
 
@@ -21,27 +21,52 @@ declare global {
 /**
  * PUBLIC_INTERFACE
  * clerkAuthMiddleware verifies Clerk JWT, attaches user with role resolved by ADMIN_EMAILS.
+ * Returns 401 JSON on failure, never throws.
  */
 export async function clerkAuthMiddleware(req: Request, res: Response, next: NextFunction) {
   const { ADMIN_EMAILS } = getEnv();
   try {
-    const auth = getAuth(req);
-    if (!auth?.userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+    // Extract token from Authorization header
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
+
+    debugLog('clerk:auth', 'Verifying token', {
+      hasAuthHeader: !!req.headers.authorization,
+      authHeaderPrefix: authHeader.split(' ')[0] || '',
+      path: req.path,
+      method: req.method,
+      tokenLength: token ? token.length : 0,
+    });
+
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized: Missing token' });
     }
-    const email = auth.sessionClaims?.email as string | undefined;
+
+    // Verify the session token with Clerk
+    const session = await clerkClient.sessions.verifySession(token, token);
+    
+    if (!session || !session.userId) {
+      return res.status(401).json({ error: 'Unauthorized: Invalid session' });
+    }
+
+    // Fetch user details to get email
+    const user = await clerkClient.users.getUser(session.userId);
+    const email = user.emailAddresses?.[0]?.emailAddress || '';
     const role: 'admin' | 'user' =
       email && ADMIN_EMAILS.has(String(email).toLowerCase()) ? 'admin' : 'user';
 
     req.user = {
-      id: auth.userId,
-      email: email || '',
+      id: session.userId,
+      email: String(email || ''),
       role,
     };
     debugLog('clerk:auth', 'Authenticated via Clerk', { id: req.user.id, role: req.user.role });
     return next();
   } catch (err) {
-    debugError('clerk:auth', 'Clerk verification failed', err);
+    debugError('clerk:auth', 'Clerk verification failed', err, {
+      path: req.path,
+      method: req.method,
+    });
     return res.status(401).json({ error: 'Unauthorized' });
   }
 }

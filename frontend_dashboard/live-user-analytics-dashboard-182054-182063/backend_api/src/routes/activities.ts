@@ -21,6 +21,54 @@ router.get('/recent', clerkAuthMiddleware, async (_req: Request, res: Response) 
 
 /**
  * PUBLIC_INTERFACE
+ * POST /api/activity
+ * Authenticated users can post their own activity events (login, page_view, etc.)
+ * This is the main endpoint for frontend to track user activity.
+ */
+router.post('/activity', clerkAuthMiddleware, async (req: Request, res: Response) => {
+  debugLog('activities:activity', 'Request start', {
+    user: req.user,
+    authHeaderPresent: !!req.headers.authorization,
+  });
+
+  const schema = Joi.object({
+    type: Joi.string().valid('login', 'logout', 'page_view', 'click', 'navigation').required(),
+    page: Joi.string().optional(),
+    device: Joi.object({
+      os: Joi.string().optional(),
+      browser: Joi.string().optional(),
+      deviceType: Joi.string().optional(),
+    }).optional(),
+    location: Joi.object({
+      country: Joi.string().optional(),
+      region: Joi.string().optional(),
+      city: Joi.string().optional(),
+      lat: Joi.number().optional(),
+      lon: Joi.number().optional(),
+    }).optional(),
+    metadata: Joi.object().optional(),
+  });
+
+  const { error, value } = schema.validate(req.body);
+  if (error) return res.status(400).json({ error: error.message });
+
+  try {
+    // Auto-populate userId from authenticated user
+    const payload = {
+      ...value,
+      userId: req.user?.id || null,
+      occurredAt: new Date(),
+    };
+    const created = await createActivity(payload as any);
+    debugLog('activities:activity', 'Created', { id: created._id.toString() });
+    return res.status(201).json({ id: created._id.toString() });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Error creating activity' });
+  }
+});
+
+/**
+ * PUBLIC_INTERFACE
  * POST /api/activities
  * Admin only - creates a synthetic activity (useful for testing)
  */

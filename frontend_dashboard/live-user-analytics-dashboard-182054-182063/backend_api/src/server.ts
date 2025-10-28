@@ -2,12 +2,16 @@ import 'dotenv/config';
 import http from 'http';
 import { connectMongo } from './db/mongoose.js';
 import { getEnv } from './config/env.js';
+import { initializeClerk } from './config/clerk.js';
 import { createApp } from './app.js';
 import { initSocket } from './realtime/socket.js';
 import { startChangeStreams } from './realtime/changeStreams.js';
 import { debugLog, debugError } from './utils/debug.js';
 
 async function bootstrap() {
+  // Initialize Clerk SDK configuration
+  initializeClerk();
+  
   const { PORT, CORS_ORIGIN, SOCKET_PATH, NODE_ENV } = getEnv();
 
   debugLog('server', 'Bootstrap starting', {
@@ -22,7 +26,8 @@ async function bootstrap() {
 
   // Create HTTP server, init Socket.io with JWT auth
   const httpServer = http.createServer(app);
-  const { channels } = initSocket(httpServer, CORS_ORIGIN, SOCKET_PATH);
+  const corsOriginForSocket = Array.isArray(CORS_ORIGIN) ? CORS_ORIGIN[0] : CORS_ORIGIN;
+  const { channels } = initSocket(httpServer, corsOriginForSocket, SOCKET_PATH);
 
   // Start server first so CORS/preflight and health are available even if DB is down
   httpServer.listen(PORT, '0.0.0.0', () => {

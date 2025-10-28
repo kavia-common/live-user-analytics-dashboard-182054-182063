@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useActivityTracking } from "../hooks/useActivityTracking";
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 import Dashboard from "../pages/Dashboard";
@@ -55,6 +56,9 @@ function AppLayout({ children }) {
 // PUBLIC_INTERFACE
 export default function AppRouter() {
   /** AppRouter defines all routes and guards. */
+  // Enable automatic activity tracking for all route changes
+  useActivityTracking();
+  
   const navigate = useNavigate();
   const { isAuthenticated, loading } = useAuth();
   const { isLoaded } = useClerkAuth();
