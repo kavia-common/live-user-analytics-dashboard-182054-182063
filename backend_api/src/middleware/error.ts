@@ -6,12 +6,15 @@ import { Request, Response, NextFunction } from 'express';
  * It formats errors and avoids leaking internals in production.
  */
 export function errorHandler(err: any, _req: Request, res: Response, _next: NextFunction) {
-  const status = err.statusCode || err.status || 500;
-  const message = err.message || 'Internal Server Error';
-  const details = err.details || undefined;
+  const status = err?.statusCode || err?.status || 500;
+  const message = err?.message || 'Internal Server Error';
+  const details = err?.details || undefined;
 
   // eslint-disable-next-line no-console
   console.error('API Error:', { status, message, details });
+
+  // Force JSON content type to prevent proxies/clients from misinterpreting response
+  res.type('application/json');
 
   return res.status(status).json({
     error: message,

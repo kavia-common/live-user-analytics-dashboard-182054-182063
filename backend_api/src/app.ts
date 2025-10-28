@@ -97,6 +97,13 @@ export function createApp() {
 
   // Ensure unknown /api routes return JSON 404 (not HTML) to avoid XML/HTML parsing issues
   app.use('/api', (req: Request, res: Response) => {
+    res.type('application/json');
+    return res.status(404).json({ error: 'Not Found' });
+  });
+
+  // For any non-API unknown route, also return JSON (prevents HTML default)
+  app.use((req: Request, res: Response) => {
+    res.type('application/json');
     return res.status(404).json({ error: 'Not Found' });
   });
 

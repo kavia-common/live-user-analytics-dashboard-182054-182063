@@ -26,10 +26,14 @@ router.options('*', (req: Request, res: Response) => {
  * Returns: { token, user }
  */
 router.post('/signup', async (req: Request, res: Response) => {
+  // Always return JSON from this router
+  res.set('Content-Type', 'application/json');
+
   debugLog('auth:signup', 'Incoming request', {
     method: req.method,
     path: req.path,
     hasBody: !!req.body,
+    contentType: req.headers['content-type'] || '',
   });
   logMongoStatus('auth:signup');
 
@@ -48,7 +52,9 @@ router.post('/signup', async (req: Request, res: Response) => {
     role: value?.role,
     passwordLength: value?.password ? String(value.password).length : undefined,
   });
-  if (error) return res.status(400).json({ error: error.message });
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
 
   try {
     const result = await signup(value);
@@ -59,8 +65,17 @@ router.post('/signup', async (req: Request, res: Response) => {
     });
     return res.status(201).json(result);
   } catch (err: any) {
-    debugError('auth:signup', 'Signup failed', err);
-    return res.status(err.statusCode || 500).json({ error: err.message || 'Error creating user' });
+    // Duplicate key error (e.g., email unique)
+    if (err?.code === 11000 || /E11000/i.test(String(err?.message))) {
+      debugError('auth:signup', 'Duplicate email detected', err, { email: value?.email });
+      return res.status(400).json({ error: 'Email already in use' });
+    }
+    debugError('auth:signup', 'Signup failed', err, {
+      email: value?.email,
+      name: value?.name,
+      hasStack: !!err?.stack,
+    });
+    return res.status(err?.statusCode || 500).json({ error: err?.message || 'Error creating user' });
   }
 });
 
@@ -70,8 +85,9 @@ router.post('/signup', async (req: Request, res: Response) => {
  * Alias of signup for frontend compatibility.
  */
 router.post('/register', async (req: Request, res: Response) => {
+  res.set('Content-Type', 'application/json');
+
   debugLog('auth:register', 'Alias invoked → forwarding to signup handler');
-  // Reuse same logic by calling signup endpoint handler
   const schema = Joi.object({
     email: Joi.string().email().required(),
     password: Joi.string().min(6).required(),
@@ -86,7 +102,9 @@ router.post('/register', async (req: Request, res: Response) => {
     role: value?.role,
     passwordLength: value?.password ? String(value.password).length : undefined,
   });
-  if (error) return res.status(400).json({ error: error.message });
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
   logMongoStatus('auth:register');
   try {
     const result = await signup(value);
@@ -97,8 +115,12 @@ router.post('/register', async (req: Request, res: Response) => {
     });
     return res.status(201).json(result);
   } catch (err: any) {
-    debugError('auth:register', 'Register failed', err);
-    return res.status(err.statusCode || 500).json({ error: err.message || 'Error creating user' });
+    if (err?.code === 11000 || /E11000/i.test(String(err?.message))) {
+      debugError('auth:register', 'Duplicate email detected', err, { email: value?.email });
+      return res.status(400).json({ error: 'Email already in use' });
+    }
+    debugError('auth:register', 'Register failed', err, { email: value?.email });
+    return res.status(err?.statusCode || 500).json({ error: err?.message || 'Error creating user' });
   }
 });
 
@@ -109,10 +131,13 @@ router.post('/register', async (req: Request, res: Response) => {
  * Returns: { token, user }
  */
 router.post('/login', async (req: Request, res: Response) => {
+  res.set('Content-Type', 'application/json');
+
   debugLog('auth:login', 'Incoming request', {
     method: req.method,
     path: req.path,
     hasBody: !!req.body,
+    contentType: req.headers['content-type'] || '',
   });
   logMongoStatus('auth:login');
 
@@ -126,7 +151,9 @@ router.post('/login', async (req: Request, res: Response) => {
     email: value?.email,
     passwordLength: value?.password ? String(value.password).length : undefined,
   });
-  if (error) return res.status(400).json({ error: error.message });
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
 
   try {
     const result = await login(value);
@@ -138,7 +165,7 @@ router.post('/login', async (req: Request, res: Response) => {
     return res.status(200).json(result);
   } catch (err: any) {
     debugError('auth:login', 'Login failed', err, { email: value?.email });
-    return res.status(err.statusCode || 500).json({ error: err.message || 'Error logging in' });
+    return res.status(err?.statusCode || 500).json({ error: err?.message || 'Error logging in' });
   }
 });
 
@@ -149,6 +176,8 @@ router.post('/login', async (req: Request, res: Response) => {
  * Returns: { user } current user from JWT (derived from token, not DB lookup)
  */
 router.get('/me', authMiddleware, async (req: Request, res: Response) => {
+  res.set('Content-Type', 'application/json');
+
   debugLog('auth:me', 'JWT verified via middleware', {
     path: req.path,
     hasAuthHeader: !!req.headers.authorization,
