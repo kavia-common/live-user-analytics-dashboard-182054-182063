@@ -22,6 +22,8 @@ Copy `.env.example` to `.env` and set these:
 - `SOCKET_PATH=/socket.io`
 - `NODE_ENV=development`
 
+CORS_ORIGIN must match your frontend origin exactly (including protocol). For Vercel, it will look like `https://your-frontend.vercel.app`.
+
 ## Getting Started
 
 1. Install dependencies:
@@ -119,9 +121,40 @@ backend_api/
 └── README.md
 ```
 
+## Deployment
+
+### Deploy backend to Render
+1. Create a new Web Service on Render from your GitHub repo, root set to `live-user-analytics-dashboard-182054-182063/backend_api`.
+2. Environment:
+   - Add the following Environment Variables:
+     - `MONGODB_URI` = your Atlas URI (replica set)
+     - `JWT_SECRET` = strong secret
+     - `CORS_ORIGIN` = your frontend origin (e.g., `https://your-frontend.vercel.app`)
+     - `SOCKET_PATH` = `/socket.io` (optional)
+     - `NODE_ENV` = `production`
+     - `PORT` = `10000` (Render provides PORT; alternatively leave unset and Render will set it)
+   - Build Command: `npm install && npm run build`
+   - Start Command: `npm start`
+3. Note your backend URL, e.g., `https://your-backend.onrender.com`.
+
+### Deploy backend to Railway
+1. Create new project → Deploy from repo (service root: `live-user-analytics-dashboard-182054-182063/backend_api`).
+2. Set Environment Variables (same as above).
+3. Build: `npm install && npm run build`
+4. Start: `npm start`
+5. Note your backend URL, e.g., `https://your-backend.up.railway.app`.
+
+### Configure frontend (Vercel)
+Set these variables in Vercel Project Settings for `frontend_dashboard`:
+- `REACT_APP_API_URL` = your backend base URL (e.g., `https://your-backend.onrender.com`)
+- `REACT_APP_SOCKET_URL` = same as above (or separate WS host if different)
+- `REACT_APP_SOCKET_PATH` = `/socket.io` (only if you changed it on backend)
+
+Re-deploy frontend after setting env vars.
+
 ## Notes
 
 - MongoDB Change Streams require a replica set (Atlas recommended).
-- CORS is configured via `CORS_ORIGIN`. Set to your frontend host (dev or Vercel domain).
-- The Socket.io namespace `/realtime` enforces JWT during the handshake.
+- CORS is configured via `CORS_ORIGIN`. Set to your frontend host (dev or Vercel domain). Credentials are enabled.
+- The Socket.io namespace `/realtime` enforces JWT during the handshake. Keep `SOCKET_PATH` consistent between frontend and backend.
 - Minimal aggregations are provided for the dashboard, extend as needed.

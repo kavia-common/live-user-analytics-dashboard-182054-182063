@@ -1,5 +1,9 @@
 import axios from "axios";
 
+/**
+ * API base URL is read from REACT_APP_API_URL (.env/.env.production).
+ * Defaults to http://localhost:4000 for local development.
+ */
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:4000";
 
 export const api = axios.create({
