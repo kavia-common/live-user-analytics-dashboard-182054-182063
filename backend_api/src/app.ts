@@ -24,10 +24,24 @@ export function createApp() {
   app.use(helmet());
   app.use(
     cors({
-      origin: CORS_ORIGIN,
+      origin: (origin, callback) => {
+        // Allow same-origin requests (no origin) and any of the configured origins
+        if (!origin) return callback(null, true);
+        const allowed = Array.isArray(CORS_ORIGIN) ? CORS_ORIGIN : [CORS_ORIGIN as any];
+        if (allowed.includes(origin)) {
+          return callback(null, true);
+        }
+        return callback(new Error(`CORS blocked for origin: ${origin}`));
+      },
       credentials: true,
+      allowedHeaders: ['Authorization', 'Content-Type'],
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      optionsSuccessStatus: 204,
     })
   );
+  // Pre-handle OPTIONS for all routes
+  app.options('*', cors());
+
   app.use(express.json({ limit: '1mb' }));
   app.use(morgan('dev'));
 

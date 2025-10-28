@@ -56,10 +56,11 @@ router.post('/login', async (req: Request, res: Response) => {
  * PUBLIC_INTERFACE
  * GET /api/auth/me
  * Header: Authorization: Bearer <token>
- * Returns: { user } current user from JWT
+ * Returns: { user } current user from JWT (derived from token, not DB lookup)
  */
 router.get('/me', authMiddleware, async (req: Request, res: Response) => {
   const user = req.user!;
+  // Returns { id, email, role } from the verified JWT payload
   return res.status(200).json({ user });
 });
 

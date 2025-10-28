@@ -22,11 +22,17 @@ export function getEnv() {
     throw new Error('Missing JWT_SECRET environment variable.');
   }
 
+  // Support multiple origins via comma-separated list, and trim spaces
+  const parsedCors = (CORS_ORIGIN || 'http://localhost:3000')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+
   return {
     MONGODB_URI,
     JWT_SECRET,
     PORT: PORT ? parseInt(PORT, 10) : 4000,
-    CORS_ORIGIN: CORS_ORIGIN || '*',
+    CORS_ORIGIN: parsedCors,
     SOCKET_PATH: SOCKET_PATH || '/socket.io',
     NODE_ENV: NODE_ENV || 'development',
   };
