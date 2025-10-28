@@ -1,17 +1,42 @@
-import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import React, { useEffect } from "react";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 import Dashboard from "../pages/Dashboard";
 import Users from "../pages/Users";
 import Settings from "../pages/Settings";
-import { SignIn, SignUp } from "@clerk/clerk-react";
+import { SignIn, SignUp, SignedIn, SignedOut, RedirectToSignIn, useAuth as useClerkAuth } from "@clerk/clerk-react";
+
+function DebugRedirectLogger({ label }) {
+  const loc = useLocation();
+  useEffect(() => {
+    // eslint-disable-next-line no-console
+    console.debug(`[Router:${label}] location`, { pathname: loc.pathname, search: loc.search });
+  }, [loc, label]);
+  return null;
+}
 
 function ProtectedRoute({ children, requireAdmin = false }) {
-  const { isAuthenticated, isAdmin } = useAuth();
-  if (!isAuthenticated) return <Navigate to="/sign-in" replace />;
-  if (requireAdmin && !isAdmin) return <Navigate to="/" replace />;
+  const { isAuthenticated, isAdmin, loading } = useAuth();
+  const { isLoaded } = useClerkAuth();
+  const location = useLocation();
+
+  // Wait for Clerk to load before deciding
+  if (!isLoaded || loading) {
+    return <div className="badge">Loading session...</div>;
+  }
+
+  if (!isAuthenticated) {
+    // eslint-disable-next-line no-console
+    console.debug("[ProtectedRoute] Not authenticated, redirecting to /sign-in", { from: location.pathname });
+    return <RedirectToSignIn redirectUrl={window.location.pathname} />;
+  }
+  if (requireAdmin && !isAdmin) {
+    // eslint-disable-next-line no-console
+    console.debug("[ProtectedRoute] Requires admin, user is not admin -> redirect /");
+    return <Navigate to="/" replace />;
+  }
   return children;
 }
 
@@ -30,47 +55,102 @@ function AppLayout({ children }) {
 // PUBLIC_INTERFACE
 export default function AppRouter() {
   /** AppRouter defines all routes and guards. */
+  const navigate = useNavigate();
+  const { isAuthenticated, loading } = useAuth();
+  const { isLoaded } = useClerkAuth();
+
+  useEffect(() => {
+    // Redirect authenticated users from auth pages to dashboard
+    if (isLoaded && !loading) {
+      const p = window.location.pathname;
+      if (isAuthenticated && (p === "/sign-in" || p === "/sign-up")) {
+        // eslint-disable-next-line no-console
+        console.debug("[AppRouter] Authenticated on auth page, navigating to /");
+        navigate("/", { replace: true });
+      }
+    }
+  }, [isAuthenticated, isLoaded, loading, navigate]);
+
   return (
     <BrowserRouter>
+      <DebugRedirectLogger label="root" />
       <Routes>
-        <Route path="/sign-in" element={
-          <div className="login-wrap"><div className="login-card"><SignIn routing="path" path="/sign-in" /></div></div>
-        } />
-        <Route path="/sign-up" element={
-          <div className="login-wrap"><div className="login-card"><SignUp routing="path" path="/sign-up" /></div></div>
-        } />
+        <Route
+          path="/sign-in"
+          element={
+            <SignedOut>
+              <div className="login-wrap">
+                <div className="login-card">
+                  <SignIn
+                    routing="path"
+                    path="/sign-in"
+                    redirectUrl="/"
+                    afterSignInUrl="/"
+                  />
+                </div>
+              </div>
+            </SignedOut>
+          }
+        />
+        <Route
+          path="/sign-up"
+          element={
+            <SignedOut>
+              <div className="login-wrap">
+                <div className="login-card">
+                  <SignUp
+                    routing="path"
+                    path="/sign-up"
+                    redirectUrl="/"
+                    afterSignUpUrl="/"
+                  />
+                </div>
+              </div>
+            </SignedOut>
+          }
+        />
         <Route
           path="/"
           element={
-            <ProtectedRoute>
-              <AppLayout>
-                <Dashboard />
-              </AppLayout>
-            </ProtectedRoute>
+            <SignedIn>
+              <ProtectedRoute>
+                <AppLayout>
+                  <Dashboard />
+                </AppLayout>
+              </ProtectedRoute>
+            </SignedIn>
           }
         />
         <Route
           path="/users"
           element={
-            <ProtectedRoute requireAdmin>
-              <AppLayout>
-                <Users />
-              </AppLayout>
-            </ProtectedRoute>
+            <SignedIn>
+              <ProtectedRoute requireAdmin>
+                <AppLayout>
+                  <Users />
+                </AppLayout>
+              </ProtectedRoute>
+            </SignedIn>
           }
         />
         <Route
           path="/settings"
           element={
-            <ProtectedRoute>
-              <AppLayout>
-                <Settings />
-              </AppLayout>
-            </ProtectedRoute>
+            <SignedIn>
+              <ProtectedRoute>
+                <AppLayout>
+                  <Settings />
+                </AppLayout>
+              </ProtectedRoute>
+            </SignedIn>
           }
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <SignedOut>
+        {/* Global fallback for any protected path when signed out */}
+        <RedirectToSignIn />
+      </SignedOut>
     </BrowserRouter>
   );
 }

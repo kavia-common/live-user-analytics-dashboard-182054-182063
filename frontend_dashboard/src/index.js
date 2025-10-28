@@ -14,7 +14,20 @@ if (!PUBLISHABLE_KEY) {
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
-  <ClerkProvider publishableKey={PUBLISHABLE_KEY}>
+  <ClerkProvider
+    publishableKey={PUBLISHABLE_KEY}
+    navigate={(to) => {
+      try {
+        // Centralized navigation for Clerk hosted components
+        window.history.pushState(null, '', to);
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.debug('[ClerkProvider:navigate] fallback replace to', to, e);
+        window.location.replace(to);
+      }
+    }}
+  >
     <App />
   </ClerkProvider>
 );

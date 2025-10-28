@@ -25,8 +25,15 @@ api.interceptors.request.use(async (config) => {
       if (token) {
         config.headers = config.headers || {};
         config.headers.Authorization = `Bearer ${token}`;
+        // eslint-disable-next-line no-console
+        console.debug("[api] Attached Authorization header");
+      } else {
+        // eslint-disable-next-line no-console
+        console.debug("[api] No token available");
       }
-    } catch {
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.debug("[api] Error retrieving token", e);
       // ignore token errors; request will likely 401
     }
   }
@@ -38,6 +45,8 @@ api.interceptors.response.use(
   (r) => r,
   (error) => {
     if (error?.response?.status === 401) {
+      // eslint-disable-next-line no-console
+      console.debug("[api] 401 received on", error.config?.url, "redirecting to /sign-in");
       if (!window.location.pathname.startsWith("/sign-in")) {
         window.location.replace("/sign-in");
       }
