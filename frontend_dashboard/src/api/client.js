@@ -3,7 +3,8 @@ import axios from "axios";
 /**
  * API base URL
  * Default: same-origin using relative '/api' so cookies/headers work without CORS.
- * Override for split-host dev by setting REACT_APP_API_URL (e.g. http://localhost:4000).
+ * In development, CRA dev server will proxy '/api' and '/socket.io' to http://localhost:4000 (see package.json "proxy").
+ * Override for split-host dev by setting REACT_APP_API_URL (e.g. http://localhost:4000) if you don't want to rely on proxy.
  */
 const API_BASE =
   (process.env.REACT_APP_API_URL && `${process.env.REACT_APP_API_URL}/api`) ||

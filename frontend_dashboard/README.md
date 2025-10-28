@@ -20,7 +20,14 @@ Single-host mode is the default. The frontend calls the backend at the same orig
 
 No environment variables are required for single-host mode.
 
-To use split-host for local development (frontend at :3000, backend at :4000), create a `.env` file:
+Development proxy:
+- The CRA dev server is configured with `"proxy": "http://localhost:4000"` in `package.json`.
+- When running `npm start` in `frontend_dashboard` and the backend is running on port 4000, all requests to:
+  - `/api/*` will be proxied to the backend.
+  - `/socket.io/*` (websocket) will also be proxied to the backend.
+- Verify with: `curl http://localhost:3000/api/health` → should return `{ status: "ok", ... }`.
+
+To use split-host for local development without relying on the proxy, create a `.env` file:
 
 - `REACT_APP_API_URL=http://localhost:4000`
 - `REACT_APP_SOCKET_URL=http://localhost:4000` (optional; defaults to API URL)
