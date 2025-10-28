@@ -5,9 +5,17 @@ import { getEnv } from './config/env.js';
 import { createApp } from './app.js';
 import { initSocket } from './realtime/socket.js';
 import { startChangeStreams } from './realtime/changeStreams.js';
+import { debugLog } from './utils/debug.js';
 
 async function bootstrap() {
-  const { PORT, CORS_ORIGIN, SOCKET_PATH } = getEnv();
+  const { PORT, CORS_ORIGIN, SOCKET_PATH, NODE_ENV } = getEnv();
+
+  debugLog('server', 'Bootstrap starting', {
+    PORT,
+    CORS_ORIGIN,
+    SOCKET_PATH,
+    NODE_ENV,
+  });
 
   // Build Express app
   const app = createApp();

@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import Joi from 'joi';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 import { createActivity, listRecentActivities } from '../services/activityService.js';
+import { debugLog } from '../utils/debug.js';
 
 const router = Router();
 
@@ -11,8 +12,13 @@ const router = Router();
  * Auth required - returns recent activity events
  */
 router.get('/recent', authMiddleware, async (req: Request, res: Response) => {
+  debugLog('activities:recent', 'Request start', {
+    user: req.user,
+    authHeaderPresent: !!req.headers.authorization,
+  });
   const limit = Math.min(parseInt((req.query.limit as string) || '50', 10), 200);
   const items = await listRecentActivities(limit);
+  debugLog('activities:recent', 'Returning items', { count: items.length, limit });
   return res.status(200).json({ items });
 });
 
@@ -22,6 +28,11 @@ router.get('/recent', authMiddleware, async (req: Request, res: Response) => {
  * Admin only - creates a synthetic activity (useful for testing)
  */
 router.post('/', authMiddleware, requireRole('admin'), async (req: Request, res: Response) => {
+  debugLog('activities:create', 'Request start', {
+    user: req.user,
+    authHeaderPresent: !!req.headers.authorization,
+  });
+
   const schema = Joi.object({
     userId: Joi.string().optional().allow(null, ''),
     sessionId: Joi.string().optional().allow(null, ''),
@@ -48,6 +59,7 @@ router.post('/', authMiddleware, requireRole('admin'), async (req: Request, res:
 
   try {
     const created = await createActivity(value as any);
+    debugLog('activities:create', 'Created', { id: created._id.toString() });
     return res.status(201).json({ id: created._id.toString() });
   } catch (err: any) {
     return res.status(500).json({ error: err.message || 'Error creating activity' });

@@ -1,5 +1,6 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 import bcrypt from 'bcrypt';
+import { debugLog, debugError } from '../utils/debug.js';
 
 /**
  * User roles for authorization, e.g., admin, user.
@@ -36,7 +37,14 @@ UserSchema.index({ role: 1, createdAt: -1 });
 
 // Method to compare password
 UserSchema.methods.comparePassword = async function (plain: string): Promise<boolean> {
-  return bcrypt.compare(plain, this.passwordHash);
+  try {
+    const ok = await bcrypt.compare(plain, this.passwordHash);
+    debugLog('bcrypt', 'Compare executed', { userId: this._id.toString(), result: ok });
+    return ok;
+  } catch (e) {
+    debugError('bcrypt', 'Compare failed', e, { userId: this._id?.toString?.() });
+    throw e;
+  }
 };
 
 // Static helper for creating a user with password hashing
@@ -53,6 +61,10 @@ export async function createUserWithPassword(
     passwordHash,
     name: params.name,
     role: params.role || 'user',
+  });
+  debugLog('bcrypt', 'Password hashed for user creation', {
+    email: params.email,
+    hashLength: passwordHash.length,
   });
   return user.save();
 }

@@ -2,6 +2,7 @@ import { Server as HttpServer } from 'http';
 import { Server as SocketIOServer, Namespace, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { getEnv } from '../config/env.js';
+import { debugLog, debugError } from '../utils/debug.js';
 
 export interface SocketAuthPayload {
   id: string;
@@ -35,7 +36,7 @@ export function initSocket(httpServer: HttpServer, corsOrigin: string, socketPat
     try {
       // Accept token as query.token or Authorization header
       const tokenFromQuery = socket.handshake.query?.token as string | undefined;
-      const authHeader = socket.handshake.auth?.token || socket.handshake.headers['authorization'];
+      const authHeader = (socket.handshake.auth?.token as string | undefined) || (socket.handshake.headers['authorization'] as string | undefined);
       let token: string | null = null;
 
       if (tokenFromQuery) {
@@ -44,14 +45,22 @@ export function initSocket(httpServer: HttpServer, corsOrigin: string, socketPat
         token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
       }
 
+      debugLog('socket:auth', 'Verifying socket token', {
+        hasQueryToken: !!tokenFromQuery,
+        hasAuthHeader: !!authHeader,
+        tokenLength: token ? token.length : 0,
+      });
+
       if (!token) {
         return next(new Error('Unauthorized: Missing token'));
       }
 
       const payload = jwt.verify(token, JWT_SECRET) as SocketAuthPayload & { iat: number; exp: number };
       (socket as any).user = { id: payload.id, email: payload.email, role: payload.role };
+      debugLog('socket:auth', 'Socket token OK', { userId: payload.id, role: payload.role });
       return next();
     } catch (err) {
+      debugError('socket:auth', 'Socket token verify failed', err);
       return next(new Error('Unauthorized: Invalid or expired token'));
     }
   });

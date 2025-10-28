@@ -10,6 +10,7 @@ import activitiesRoutes from './routes/activities.js';
 import statsRoutes from './routes/stats.js';
 import { errorHandler } from './middleware/error.js';
 import { getEnv } from './config/env.js';
+import { debugLog } from './utils/debug.js';
 
 /**
  * PUBLIC_INTERFACE
@@ -44,6 +45,9 @@ export function createApp() {
 
   app.use(express.json({ limit: '1mb' }));
   app.use(morgan('dev'));
+
+  // Log CORS configuration in non-production for diagnostics
+  debugLog('cors', 'Configured CORS origins', { origins: CORS_ORIGIN });
 
   // Basic rate limiter to protect API
   const limiter = rateLimit({
