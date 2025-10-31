@@ -80,11 +80,11 @@ export function useSocket(namespace = '/', opts = {}) {
         socket.on('connect', () => active && setConnected(true));
         socket.on('disconnect', () => active && setConnected(false));
         socket.on('connect_error', (err) => {
-          console.warn('Socket connect_error:', err?.message);
+          try { console.warn('Socket connect_error:', err?.message); } catch (_) {}
           if (active) setError(err);
         });
       } catch (e) {
-        console.warn('Socket initialization failed:', e?.message);
+        try { console.warn('Socket initialization failed:', e?.message); } catch (_) {}
         if (active) setError(e);
       }
     })();

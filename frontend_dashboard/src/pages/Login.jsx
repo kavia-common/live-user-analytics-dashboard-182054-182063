@@ -26,7 +26,7 @@ export default function Login() {
           backdropFilter: "blur(8px)",
         }}
       >
-        <SignIn routing="path" path="/login" signUpUrl="/sign-up" />
+        <SignIn signUpUrl="/sign-up" />
       </div>
     </div>
   );

@@ -34,13 +34,18 @@ function withTimeout(promise, ms = 4000) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(id));
 }
 
-// PUBLIC_INTERFACE
+/**
+ * PUBLIC_INTERFACE
+ * apiGet(path: string): Promise<any>
+ * - Performs a GET request to API_BASE_URL + path.
+ * - Never throws synchronously; network errors are caught and rethrown for caller to handle.
+ * - Callers should wrap in try/catch and use fallback data when errors occur.
+ */
 export async function apiGet(path) {
-  /** Perform GET to API_BASE_URL + path; throws on network but caller should catch and fallback */
   const suffix = path.startsWith('/') ? path : `/${path}`;
   const url = `${API_BASE_URL}${suffix}`;
   const res = await withTimeout(fetch(url, { credentials: 'include' })).catch((e) => {
-    console.warn('API fetch failed:', e?.message);
+    try { console.warn('API fetch failed:', e?.message); } catch (_) {}
     throw e;
   });
   if (!res.ok) {
