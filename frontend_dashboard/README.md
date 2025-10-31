@@ -45,9 +45,17 @@ Ensure both keys come from the SAME Clerk instance (matching environment). If yo
 
 Same as before; CRA proxy is configured and websockets are proxied. Use `npm run start:preview` if needed.
 
+Fixing "Invalid Host header" in previews:
+- This repo includes a development-only `.env.development.local` that sets:
+  - `DANGEROUSLY_DISABLE_HOST_CHECK=true`
+  - `HOST=0.0.0.0`
+  - `PORT=3000`
+- These settings allow CRA to accept non-localhost hosts used by preview environments.
+- No changes are made to production build scripts.
+
 Verify:
 - Backend running on port 4000
-- Frontend at http://localhost:3000
+- Frontend at http://localhost:3000 (or your preview URL)
 - Check: `curl http://localhost:3000/api/health` → `{ status: "ok" }`
 
 ### Development proxy (local)
