@@ -33,9 +33,8 @@ export function useActivityTracking() {
       try {
         // Use sendBeacon for reliability on page unload where possible
         if (navigator?.sendBeacon) {
-          const urlBase =
-            (process.env.REACT_APP_API_URL || "/api").replace(/\/*$/, "");
-          const url = `${urlBase}/activities/track`;
+          const apiBase = (process.env.REACT_APP_API_URL || "").replace(/\/*$/, "");
+          const url = `${apiBase}/api/activities/track`;
           const metadata = {
             type: "session_end",
             metadata: {

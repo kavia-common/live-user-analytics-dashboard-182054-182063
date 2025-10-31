@@ -2,42 +2,29 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
 
 /**
- * Resolve base URLs and paths from environment with sane defaults.
+ * Resolve socket URL and path from environment with same-origin defaults.
  */
-function getSocketConfig() {
-  const API_URL = process.env.REACT_APP_API_URL || process.env.REACT_APP_frontend_dashboard__REACT_APP_API_URL || '';
-  const SOCKET_URL =
-    process.env.REACT_APP_SOCKET_URL ||
-    process.env.REACT_APP_frontend_dashboard__REACT_APP_SOCKET_URL ||
-    (API_URL ? API_URL.replace(/\/+$/, '') : '');
+function resolveSocketParams() {
+  const RAW_SOCKET_URL = (process.env.REACT_APP_SOCKET_URL || '').trim();
+  // Undefined URL => same-origin; if provided, use as-is (should include protocol/host)
+  const url = RAW_SOCKET_URL.length ? RAW_SOCKET_URL.replace(/\/+$/, '') : undefined;
 
-  // Ensure path starts with '/' and default to '/socket.io' for Socket.IO servers
-  const rawPath =
-    process.env.REACT_APP_SOCKET_PATH ||
-    process.env.REACT_APP_frontend_dashboard__REACT_APP_SOCKET_PATH ||
-    '/socket.io';
-  const SOCKET_PATH = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
+  const RAW_PATH = (process.env.REACT_APP_SOCKET_PATH || '/socket.io').trim();
+  const path = RAW_PATH.startsWith('/') ? RAW_PATH : `/${RAW_PATH}`;
 
-  // Optional namespace; default to root
-  const NAMESPACE =
-    process.env.REACT_APP_SOCKET_NAMESPACE ||
-    process.env.REACT_APP_frontend_dashboard__REACT_APP_SOCKET_NAMESPACE ||
-    '';
-
-  return { SOCKET_URL, SOCKET_PATH, NAMESPACE };
+  return { url, path };
 }
 
 /**
  * PUBLIC_INTERFACE
  * useSocket
- * A React hook that creates and manages a Socket.IO connection authenticated via Clerk.
+ * A React hook that creates and manages a Socket.IO connection, same-origin by default.
  *
- * - Attempts to get a Clerk token using window.Clerk if available.
- * - Sends token in auth payload and as Bearer header for proxy compatibility.
- * - Supports custom socket path and namespace via env.
+ * - URL: undefined (same-origin) unless REACT_APP_SOCKET_URL is set.
+ * - Path: REACT_APP_SOCKET_PATH or '/socket.io'.
+ * - Sends Clerk token if available via Authorization header and auth.token.
  */
-export function useSocket() {
-  /** This is a public hook that provides a connected Socket.IO client and helpers. */
+export default function useSocket() {
   const socketRef = useRef(null);
   const [status, setStatus] = useState('disconnected'); // 'connecting' | 'connected' | 'disconnected' | 'error'
   const [error, setError] = useState(null);
@@ -47,7 +34,7 @@ export function useSocket() {
       return socketRef.current;
     }
 
-    const { SOCKET_URL, SOCKET_PATH, NAMESPACE } = getSocketConfig();
+    const { url, path } = resolveSocketParams();
 
     // Attempt to retrieve a Clerk auth token
     let token = null;
@@ -61,9 +48,6 @@ export function useSocket() {
       // continue unauthenticated
     }
 
-    const baseUrl = SOCKET_URL || window.location.origin;
-    const url = `${baseUrl}${NAMESPACE || ''}`;
-
     setStatus('connecting');
     setError(null);
 
@@ -71,7 +55,7 @@ export function useSocket() {
     const auth = token ? { token } : {};
 
     const socket = io(url, {
-      path: SOCKET_PATH,
+      path,
       transports: ['websocket', 'polling'],
       withCredentials: true,
       autoConnect: true,
@@ -115,9 +99,11 @@ export function useSocket() {
     };
   }, [connectSocket]);
 
-  // PUBLIC_INTERFACE
+  /**
+   * PUBLIC_INTERFACE
+   * Subscribe to a socket event safely.
+   */
   const subscribe = useCallback((event, handler) => {
-    /** Subscribe to a socket event safely. */
     if (!socketRef.current) return () => {};
     socketRef.current.on(event, handler);
     return () => {
@@ -126,9 +112,11 @@ export function useSocket() {
     };
   }, []);
 
-  // PUBLIC_INTERFACE
+  /**
+   * PUBLIC_INTERFACE
+   * Emit a socket event safely.
+   */
   const emit = useCallback((event, payload) => {
-    /** Emit a socket event safely. */
     if (!socketRef.current) return;
     socketRef.current.emit(event, payload);
   }, []);
@@ -141,5 +129,3 @@ export function useSocket() {
     emit,
   };
 }
-
-export default useSocket;

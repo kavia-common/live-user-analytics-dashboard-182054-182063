@@ -44,8 +44,8 @@ export default function LiveActivityFeed() {
       setLoading(true);
       // allow either /activities or /activities/recent depending on backend
       const res =
-        (await apiClient.get("/activities?limit=30").catch(() => null)) ||
-        (await apiClient.get("/activities/recent?limit=30").catch(() => null));
+        (await apiClient.get("/api/activities?limit=30").catch(() => null)) ||
+        (await apiClient.get("/api/activities/recent?limit=30").catch(() => null));
 
       const data =
         res?.data?.items || // possible envelope

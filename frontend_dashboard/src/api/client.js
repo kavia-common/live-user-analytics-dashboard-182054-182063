@@ -3,15 +3,27 @@ import axios from "axios";
 /**
  * PUBLIC_INTERFACE
  * api client
- * Axios instance pointing to backend API. Includes credentials and JSON headers.
+ * Axios instance configured for SAME-ORIGIN by default.
+ *
+ * Defaults:
+ *  - baseURL = '' so calls like api.get('/api/users') go to the current origin.
+ * Overrides:
+ *  - REACT_APP_API_URL can be set to a full URL (e.g., https://api.example.com or https://api.example.com/api)
+ * Notes:
+ *  - Do not append '/api' here. Use '/api/...' in call sites to avoid double-prefix issues.
  */
-const RAW_API_URL = process.env.REACT_APP_API_URL || "/api";
+const RAW_API_URL = (process.env.REACT_APP_API_URL || "").trim();
 
-// Normalize base URL to avoid double slashes and double '/api'
-const API_BASE_URL = (RAW_API_URL || "/api").replace(/\/*$/, "") || "/api";
+// Normalize override; if not provided, use same-origin by leaving baseURL as ''
+let baseURL = RAW_API_URL || "";
+
+// Remove trailing slash(es) to avoid '//' when joining
+if (baseURL.endsWith("/")) {
+  baseURL = baseURL.replace(/\/+$/, "");
+}
 
 const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL, // '' for same-origin, or override from REACT_APP_API_URL
   withCredentials: true,
   headers: {
     "Content-Type": "application/json",
@@ -27,7 +39,6 @@ api.interceptors.request.use(
       if (session && typeof session.getToken === "function") {
         const token = await session.getToken({ template: "default" }).catch(() => null);
         if (token) {
-          // Only include Authorization if token is present; keep other headers intact
           config.headers = {
             ...(config.headers || {}),
             Authorization: `Bearer ${token}`,
@@ -42,12 +53,14 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// PUBLIC_INTERFACE
-// apiFetch helper with credentials and JSON handling
+/**
+ * PUBLIC_INTERFACE
+ * apiFetch helper with credentials and JSON handling using same-origin default.
+ * Use with path starting with '/api/...'
+ */
 export async function apiFetch(path, options = {}) {
-  const base = API_BASE_URL;
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const url = `${base}${normalizedPath}`;
+  const url = `${baseURL}${normalizedPath}`;
   const resp = await fetch(url, {
     method: options.method || "GET",
     ...options,

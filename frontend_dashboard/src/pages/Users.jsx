@@ -19,7 +19,7 @@ export default function Users() {
     setLoading(true);
     setErr(null);
     try {
-      const res = await api.get(`/users?page=${page}&limit=20`);
+      const res = await api.get(`/api/users?page=${page}&limit=20`);
       setData(res.data || { items: [], total: 0, page, limit: 20 });
     } catch (e) {
       setErr(e?.response?.data?.message || e.message || "Failed to load users");
@@ -40,7 +40,7 @@ export default function Users() {
 
   const updateRole = async (id, role) => {
     try {
-      await api.patch(`/users/${id}/role`, { role });
+      await api.patch(`/api/users/${id}/role`, { role });
       fetchUsers(data.page);
     } catch (e) {
       // eslint-disable-next-line no-console
