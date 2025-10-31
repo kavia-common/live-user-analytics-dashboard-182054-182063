@@ -27,7 +27,12 @@ if (!PUBLISHABLE_KEY) {
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <ClerkProvider publishableKey={PUBLISHABLE_KEY} navigate={(to) => window.history.pushState(null, '', to)}>
+    {/* The BrowserRouter here is the single, top-level Router for the app.
+        Do not render another Router inside child components (e.g., AppRouter). */}
+    <ClerkProvider
+      publishableKey={PUBLISHABLE_KEY}
+      navigate={(to) => window.history.pushState(null, '', to)}
+    >
       <BrowserRouter>
         <AuthProvider>
           <App />
