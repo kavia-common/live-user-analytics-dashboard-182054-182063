@@ -21,6 +21,10 @@ export function useSocket() {
       const directApi = process.env.REACT_APP_API_URL;
       const explicitBase = directSocket || directApi || null;
       const url = explicitBase ? `${String(explicitBase).replace(/\/*$/, "")}/realtime` : undefined;
+      if (!explicitBase && process.env.NODE_ENV !== "production") {
+        // eslint-disable-next-line no-console
+        console.warn("[socket] REACT_APP_SOCKET_URL not set; using same-origin via CRA proxy.");
+      }
 
       const SOCKET_PATH = process.env.REACT_APP_SOCKET_PATH || "/socket.io";
 

@@ -8,9 +8,9 @@ import { getClerkTokenProvider } from "../context/AuthContext";
 export function getApiBaseUrl() {
   // Prefer explicit envs; standardized CRA-style variable
   const direct = process.env.REACT_APP_API_URL;
-  // Fallback to same-origin via CRA proxy in dev
   const base = direct && String(direct).trim().length ? direct : "";
   const normalized = base ? base.replace(/\/*$/, "") : "";
+  // Default to CRA proxy relative path to avoid crashes when env is absent
   return normalized ? `${normalized}/api` : "/api";
 }
 

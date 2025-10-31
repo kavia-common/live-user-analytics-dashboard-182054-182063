@@ -21,8 +21,11 @@ export function getClerkTokenProvider() {
  * AuthProvider sources auth state from Clerk and augments with backend role.
  */
 export function AuthProvider({ children }) {
-  const { isSignedIn, getToken, signOut, isLoaded: clerkAuthLoaded } = useClerkAuth();
-  const { user: clerkUser, isLoaded: clerkUserLoaded } = useClerkUser();
+  // If ClerkProvider is a no-op (dev without key), these hooks still exist but may return undefined.
+  const clerkAuth = useClerkAuth?.() || {};
+  const clerkUserHook = useClerkUser?.() || {};
+  const { isSignedIn = false, getToken = async () => null, signOut = async () => {}, isLoaded: clerkAuthLoaded = true } = clerkAuth;
+  const { user: clerkUser = null, isLoaded: clerkUserLoaded = true } = clerkUserHook;
   const [role, setRole] = useState("user");
   const [fetchingRole, setFetchingRole] = useState(false);
 
