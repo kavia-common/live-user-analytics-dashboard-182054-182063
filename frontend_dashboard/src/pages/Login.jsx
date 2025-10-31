@@ -1,26 +1,31 @@
 import React, { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "@clerk/clerk-react";
 import { trackLogin } from "../utils/activity";
 
 /**
- * Legacy Login component preserved to avoid broken imports.
- * Redirects to Clerk SignIn route and tracks login when authenticated.
+ * PUBLIC_INTERFACE
+ * Login placeholder: instructs users to use the Clerk SignIn widget route.
+ * Tracks login event when authenticated. No redirects here to avoid loops.
  */
 export default function Login() {
-  const navigate = useNavigate();
   const { isSignedIn } = useAuth();
 
   useEffect(() => {
-    // Track login event when user successfully signs in
     if (isSignedIn) {
       trackLogin();
     }
   }, [isSignedIn]);
 
-  useEffect(() => {
-    navigate("/sign-in", { replace: true });
-  }, [navigate]);
-
-  return null;
+  return (
+    <div style={{ display: "grid", placeItems: "center", height: "60vh", color: "#6b7280" }}>
+      <div>
+        <div style={{ fontSize: 18, fontWeight: 600, textAlign: "center" }}>
+          Please sign in to continue
+        </div>
+        <div style={{ fontSize: 14, marginTop: 8, textAlign: "center" }}>
+          Open the Sign In page from your authentication flow.
+        </div>
+      </div>
+    </div>
+  );
 }

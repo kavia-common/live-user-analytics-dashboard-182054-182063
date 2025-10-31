@@ -7,6 +7,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { useAuth } from '@clerk/clerk-react';
 import api from '../api/client';
 
 // PUBLIC_INTERFACE
@@ -47,56 +48,92 @@ async function fetchMe(signal) {
  * AuthProvider fetches backend profile and exposes user, role, isAdmin, loading, and refresh.
  */
 export function AuthProvider({ children }) {
+  const { isLoaded, isSignedIn, user: clerkUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
   const abortRef = useRef(null);
-  const initializedRef = useRef(false);
+  const didUnmountRef = useRef(false);
+  const lastClerkStateRef = useRef({ isLoaded: undefined, isSignedIn: undefined });
+
+  const safeSetState = useCallback((setter) => {
+    if (!didUnmountRef.current) {
+      setter();
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     if (abortRef.current) abortRef.current.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
-    setLoading(true);
+    safeSetState(() => setLoading(true));
     try {
       const me = await fetchMe(controller.signal);
-      setProfile(me);
+      safeSetState(() => setProfile(me));
     } catch {
-      // swallow errors, keep profile as null
-      setProfile(null);
+      safeSetState(() => setProfile(null));
     } finally {
-      setLoading(false);
+      safeSetState(() => setLoading(false));
     }
-  }, []);
+  }, [safeSetState]);
 
+  // Effect A: Wait for Clerk to finish loading before fetching backend profile.
   useEffect(() => {
-    // Run once on mount
-    if (!initializedRef.current) {
-      initializedRef.current = true;
-      refresh();
+    const changed =
+      lastClerkStateRef.current.isLoaded !== isLoaded ||
+      lastClerkStateRef.current.isSignedIn !== isSignedIn;
+    if (!changed) return;
+    lastClerkStateRef.current = { isLoaded, isSignedIn };
+
+    if (!isLoaded) {
+      // Clerk not initialized; hold loading to avoid flicker
+      safeSetState(() => setLoading(true));
+      return;
     }
+    // If signed out, clear profile and set loading false
+    if (!isSignedIn) {
+      safeSetState(() => setProfile(null));
+      safeSetState(() => setLoading(false));
+      return;
+    }
+    // Signed in and Clerk loaded: fetch backend profile
+    refresh();
+  }, [isLoaded, isSignedIn, refresh, safeSetState]);
+
+  // Cleanup to avoid setState on unmount
+  useEffect(() => {
+    didUnmountRef.current = false;
     return () => {
+      didUnmountRef.current = true;
       if (abortRef.current) abortRef.current.abort();
     };
-  }, [refresh]);
+  }, []);
 
   const value = useMemo(() => {
-    const email =
+    const clerkEmail =
+      (clerkUser?.primaryEmailAddress?.emailAddress) ||
+      (clerkUser?.emailAddresses?.[0]?.emailAddress);
+    const backendEmail =
       profile?.clerk?.email ||
       profile?.user?.email ||
       profile?.email ||
       null;
+    const email = backendEmail || clerkEmail || null;
+
     const id =
       profile?.clerk?.id ||
       profile?.user?.id ||
       profile?._id ||
+      clerkUser?.id ||
       null;
+
     const role =
       profile?.role ||
       profile?.user?.role ||
       (deriveAdminFromEmail(email) ? 'admin' : 'user');
+
     const isAdmin = role === 'admin';
-    const user = (email || id) ? { id, email, name: profile?.user?.name || profile?.name } : null;
+    const user = (email || id) ? { id, email, name: profile?.user?.name || profile?.name || clerkUser?.fullName } : null;
 
     return {
       user,
@@ -106,7 +143,7 @@ export function AuthProvider({ children }) {
       refresh,
       profile,
     };
-  }, [profile, loading]);
+  }, [profile, loading, clerkUser]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

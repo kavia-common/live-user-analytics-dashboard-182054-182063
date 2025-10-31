@@ -5,7 +5,7 @@ import { trackPageView, trackSessionStart, trackSessionEnd } from "../utils/acti
 /**
  * PUBLIC_INTERFACE
  * useActivityTracking automatically tracks:
- * - session_start on mount
+ * - session_start on mount (except login route)
  * - session_end on page unload or when document becomes hidden
  * - page_view on every route change (debounced, guarded)
  * It is resilient to missing auth; the axios client will simply omit Authorization if no token is available.
@@ -20,7 +20,10 @@ export function useActivityTracking() {
     if (!mountedRef.current) {
       mountedRef.current = true;
       try {
-        trackSessionStart();
+        // Do not start a session on the login page to avoid unauthenticated spam
+        if (window.location.pathname !== "/login" && window.location.pathname !== "/sign-in") {
+          trackSessionStart();
+        }
       } catch {
         // noop
       }
@@ -31,9 +34,7 @@ export function useActivityTracking() {
         // Use sendBeacon for reliability on page unload where possible
         if (navigator?.sendBeacon) {
           const urlBase =
-            (process.env.REACT_APP_API_URL ||
-              process.env.REACT_APP_frontend_dashboard__REACT_APP_API_URL ||
-              "/api").replace(/\/+$/, "");
+            (process.env.REACT_APP_API_URL || "/api").replace(/\/*$/, "");
           const url = `${urlBase}/activities/track`;
           const metadata = {
             type: "session_end",
@@ -82,7 +83,10 @@ export function useActivityTracking() {
     if (lastTrackedPathRef.current === pathname) return;
     lastTrackedPathRef.current = pathname;
     try {
-      trackPageView(pathname);
+      // Avoid page_view spam on login route before auth
+      if (pathname !== "/login" && pathname !== "/sign-in") {
+        trackPageView(pathname);
+      }
     } catch {
       // noop
     }

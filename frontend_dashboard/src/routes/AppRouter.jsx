@@ -1,6 +1,6 @@
 import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import { SignedIn, SignedOut } from '@clerk/clerk-react';
+import { Routes, Route } from 'react-router-dom';
+import { SignedOut } from '@clerk/clerk-react';
 import Dashboard from '../pages/Dashboard';
 import Users from '../pages/Users';
 import Settings from '../pages/Settings';
@@ -22,9 +22,22 @@ function LoadingScreen() {
 function ProtectedRoute({ children, requireAdmin = false }) {
   const { loading, user, isAdmin } = useAuthContext();
   if (loading) return <LoadingScreen />;
-  if (!user) return <Navigate to="/login" replace />;
-  if (requireAdmin && !isAdmin) return <Navigate to="/" replace />;
+  if (!user) return <div style={{ padding: 24 }}><LoadingScreen /></div>;
+  if (requireAdmin && !isAdmin) {
+    return <div style={{ padding: 24 }}>You do not have access to this page.</div>;
+  }
   return children;
+}
+
+function NotFound() {
+  return (
+    <div style={{ display: 'grid', placeItems: 'center', height: '100vh', color: '#6b7280' }}>
+      <div>
+        <div style={{ fontSize: 20, fontWeight: 700 }}>404 - Not Found</div>
+        <div style={{ fontSize: 14, marginTop: 6 }}>The page you are looking for doesn’t exist.</div>
+      </div>
+    </div>
+  );
 }
 
 export default function AppRouter() {
@@ -32,19 +45,13 @@ export default function AppRouter() {
 
   return (
     <Routes>
-      {/* Public login route: show login only when signed out. Do not conditionally Navigate from here based on app auth to avoid loops. */}
+      {/* Public login route: show login only when signed out */}
       <Route
         path="/login"
         element={
-          <>
-            <SignedOut>
-              <Login />
-            </SignedOut>
-            {/* When signed in, do not bounce immediately here; ProtectedRoute on '/' will handle gating */}
-            <SignedIn>
-              <Navigate to="/" replace />
-            </SignedIn>
-          </>
+          <SignedOut>
+            <Login />
+          </SignedOut>
         }
       />
       {/* Authenticated routes */}
@@ -72,8 +79,8 @@ export default function AppRouter() {
           </ProtectedRoute>
         }
       />
-      {/* Fallback: always go to '/' which will gate; avoid depending on loading state here */}
-      <Route path="*" element={<Navigate to="/" replace />} />
+      {/* Catch-all 404 without redirects */}
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }

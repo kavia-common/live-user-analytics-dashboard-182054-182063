@@ -4,8 +4,11 @@ import { parseUserAgent, getLocationHints } from "./device";
 let inFlight = false;
 let lastPathname = null;
 let suppressedUntil = 0;
-const SUPPRESS_MS_ON_ERROR = 10000; // cooldown after 401/5xx
+let backoffMs = 0;
+const BASE_BACKOFF = 2000; // start with 2s
+const MAX_BACKOFF = 60000; // cap at 60s
 let pageViewTimer = null;
+let lastErrorLoggedAt = 0;
 
 /**
  * PUBLIC_INTERFACE
@@ -19,7 +22,7 @@ export async function postActivity(payload) {
   if (now < suppressedUntil) {
     if (process.env.NODE_ENV !== "production") {
       // eslint-disable-next-line no-console
-      console.warn("[activity] Suppressed due to recent server error.");
+      console.warn("[activity] Suppressed due to backoff window.");
     }
     return;
   }
@@ -40,22 +43,33 @@ export async function postActivity(payload) {
     }
     // apiClient has baseURL '/api' or REACT_APP_API_URL
     const response = await apiClient.post("/activities/track", payload);
+    // Reset backoff on success
+    backoffMs = 0;
+    lastErrorLoggedAt = 0;
     if (process.env.NODE_ENV !== "production") {
       // eslint-disable-next-line no-console
       console.log("[activity] ✓ Activity posted:", response.status);
     }
   } catch (err) {
     const status = err?.response?.status;
-    if (status === 401 || status >= 500) {
-      suppressedUntil = Date.now() + SUPPRESS_MS_ON_ERROR;
+    const body = err?.response?.data;
+    // Exponential backoff after server or auth errors
+    if (status === 401 || status >= 500 || !status) {
+      backoffMs = backoffMs ? Math.min(backoffMs * 2, MAX_BACKOFF) : BASE_BACKOFF;
+      suppressedUntil = Date.now() + backoffMs;
     }
     if (process.env.NODE_ENV !== "production") {
-      // eslint-disable-next-line no-console
-      console.error(
-        "[activity] ✗ Failed to post activity:",
-        status,
-        err?.response?.data?.error || err?.message
-      );
+      // Log the exact response body once during a backoff cycle for diagnosis
+      const shouldLogBody = !lastErrorLoggedAt || (Date.now() - lastErrorLoggedAt > MAX_BACKOFF);
+      if (shouldLogBody) {
+        lastErrorLoggedAt = Date.now();
+        // eslint-disable-next-line no-console
+        console.error(
+          "[activity] ✗ Failed to post activity:",
+          status,
+          body || err?.message || err
+        );
+      }
     }
   } finally {
     inFlight = false;
