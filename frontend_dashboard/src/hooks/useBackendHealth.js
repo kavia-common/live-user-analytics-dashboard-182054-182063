@@ -16,7 +16,7 @@ export default function useBackendHealth() {
     const check = async () => {
       try {
         // We intentionally use fetch to avoid axios interceptors altering behavior.
-        const res = await fetch(`${rawBaseUrl()}/health`, {
+        const res = await fetch(`${rawBaseUrl()}/api/health`, {
           credentials: 'same-origin',
           headers: { 'Accept': 'application/json' },
         });

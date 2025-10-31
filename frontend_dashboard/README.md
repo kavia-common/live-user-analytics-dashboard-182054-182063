@@ -35,7 +35,7 @@ Note: Do not hardcode backend URLs in code. Use relative paths and the environme
 ### Preview/Container Environments
 Some preview systems inject HOST=0.0.0.0 or enforce non-localhost host headers. Use:
 - npm run start:preview
-This sets HOST=0.0.0.0 and disables host checks for CRA so port 3000 becomes ready.
+This sets HOST=0.0.0.0 and disables host checks for CRA so port 3001 (or assigned $PORT) becomes ready.
 
 ## Environment
 
