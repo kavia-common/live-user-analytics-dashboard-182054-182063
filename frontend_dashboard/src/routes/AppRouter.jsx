@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { SignedIn, SignedOut } from '@clerk/clerk-react';
 import Dashboard from '../pages/Dashboard';
 import Users from '../pages/Users';
@@ -32,47 +32,45 @@ export default function AppRouter() {
   useActivityTracking();
 
   return (
-    <Router>
-      <Routes>
-        <Route
-          path="/login"
-          element={
-            <>
-              <SignedOut>
-                <Login />
-              </SignedOut>
-              <SignedIn>
-                <Navigate to="/" replace />
-              </SignedIn>
-            </>
-          }
-        />
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/users"
-          element={
-            <ProtectedRoute requireAdmin>
-              <Users />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/settings"
-          element={
-            <ProtectedRoute>
-              <Settings />
-            </ProtectedRoute>
-          }
-        />
-        <Route path="*" element={<Navigate to={loading ? '/login' : '/'} replace />} />
-      </Routes>
-    </Router>
+    <Routes>
+      <Route
+        path="/login"
+        element={
+          <>
+            <SignedOut>
+              <Login />
+            </SignedOut>
+            <SignedIn>
+              <Navigate to="/" replace />
+            </SignedIn>
+          </>
+        }
+      />
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/users"
+        element={
+          <ProtectedRoute requireAdmin>
+            <Users />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <Settings />
+          </ProtectedRoute>
+        }
+      />
+      <Route path="*" element={<Navigate to={loading ? '/login' : '/'} replace />} />
+    </Routes>
   );
 }
