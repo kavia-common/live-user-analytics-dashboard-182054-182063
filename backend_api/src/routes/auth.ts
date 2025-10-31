@@ -1,7 +1,6 @@
 import { Router, Request, Response } from 'express';
 import Joi from 'joi';
 import { clerkAuthMiddleware } from '../middleware/clerkAuth.js';
-import { legacyJwtAuthMiddleware } from '../middleware/auth.js';
 import { login, signup } from '../services/authService.js';
 import { debugLog, debugError, logMongoStatus } from '../utils/debug.js';
 import { getEnv } from '../config/env.js';

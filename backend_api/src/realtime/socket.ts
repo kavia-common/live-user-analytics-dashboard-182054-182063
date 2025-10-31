@@ -1,14 +1,8 @@
 import { Server as HttpServer } from 'http';
 import { Server as SocketIOServer, Namespace, Socket } from 'socket.io';
-import jwt from 'jsonwebtoken';
+import { getAuth } from '@clerk/clerk-sdk-node';
 import { getEnv } from '../config/env.js';
 import { debugLog, debugError } from '../utils/debug.js';
-
-export interface SocketAuthPayload {
-  id: string;
-  email: string;
-  role: 'admin' | 'user';
-}
 
 export interface RealTimeChannels {
   realtimeNamespace: Namespace;
@@ -16,9 +10,12 @@ export interface RealTimeChannels {
 
 /**
  * PUBLIC_INTERFACE
- * initSocket initializes Socket.io with CORS and JWT auth on /realtime namespace.
+ * initSocket initializes Socket.io with CORS and Clerk auth on /realtime namespace.
+ * Clients should connect using a Clerk JWT in either:
+ *  - query: { token: 'Bearer <jwt>' } or { token: '<jwt>' }
+ *  - auth: { token: 'Bearer <jwt>' } during connection
  */
-export function initSocket(httpServer: HttpServer, corsOrigin: string, socketPath: string): { io: SocketIOServer; channels: RealTimeChannels } {
+export function initSocket(httpServer: HttpServer, corsOrigin: string | string[], socketPath: string): { io: SocketIOServer; channels: RealTimeChannels } {
   const io = new SocketIOServer(httpServer, {
     cors: {
       origin: corsOrigin,
@@ -28,40 +25,54 @@ export function initSocket(httpServer: HttpServer, corsOrigin: string, socketPat
     path: socketPath,
   });
 
-  const { JWT_SECRET } = getEnv();
+  const { ADMIN_EMAILS } = getEnv();
   const realtime = io.of('/realtime');
 
-  // JWT auth middleware for namespace
+  // Clerk auth middleware for namespace
   realtime.use((socket: Socket, next) => {
     try {
-      // Accept token as query.token or Authorization header
+      // Extract token from common places used by clients
       const tokenFromQuery = socket.handshake.query?.token as string | undefined;
       const authHeader = (socket.handshake.auth?.token as string | undefined) || (socket.handshake.headers['authorization'] as string | undefined);
-      let token: string | null = null;
+      let bearer = tokenFromQuery || authHeader || '';
+      if (bearer?.startsWith('Bearer ')) bearer = bearer.substring(7);
 
-      if (tokenFromQuery) {
-        token = tokenFromQuery;
-      } else if (typeof authHeader === 'string') {
-        token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
-      }
-
-      debugLog('socket:auth', 'Verifying socket token', {
+      debugLog('socket:auth', 'Verifying Clerk token (namespace middleware)', {
         hasQueryToken: !!tokenFromQuery,
         hasAuthHeader: !!authHeader,
-        tokenLength: token ? token.length : 0,
+        tokenLength: bearer ? bearer.length : 0,
       });
 
-      if (!token) {
+      if (!bearer) {
         return next(new Error('Unauthorized: Missing token'));
       }
 
-      const payload = jwt.verify(token, JWT_SECRET) as SocketAuthPayload & { iat: number; exp: number };
-      (socket as any).user = { id: payload.id, email: payload.email, role: payload.role };
-      debugLog('socket:auth', 'Socket token OK', { userId: payload.id, role: payload.role });
+      // Build a mock request to pass to Clerk getAuth, which looks at headers
+      const fakeReq: any = {
+        headers: {
+          authorization: `Bearer ${bearer}`,
+        },
+      };
+      const auth = getAuth(fakeReq);
+      if (!auth?.userId) {
+        return next(new Error('Unauthorized'));
+      }
+
+      const claims = (auth as any).sessionClaims || {};
+      const email: string =
+        claims.email ||
+        claims.email_address ||
+        claims.primary_email ||
+        (Array.isArray(claims.emails) ? claims.emails[0] : '') ||
+        '';
+
+      const role: 'admin' | 'user' = email && ADMIN_EMAILS.has(String(email).toLowerCase()) ? 'admin' : 'user';
+      (socket as any).user = { id: auth.userId, email: String(email || ''), role };
+      debugLog('socket:auth', 'Clerk OK for socket', { userId: auth.userId, role });
       return next();
     } catch (err) {
-      debugError('socket:auth', 'Socket token verify failed', err);
-      return next(new Error('Unauthorized: Invalid or expired token'));
+      debugError('socket:auth', 'Clerk verification failed for socket', err);
+      return next(new Error('Unauthorized'));
     }
   });
 

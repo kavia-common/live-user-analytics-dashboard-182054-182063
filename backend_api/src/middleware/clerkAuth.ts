@@ -26,8 +26,9 @@ declare global {
 export async function clerkAuthMiddleware(req: Request, res: Response, next: NextFunction) {
   const { ADMIN_EMAILS } = getEnv();
   try {
-    // getAuth reads the Authorization Bearer token from the request headers
+    // getAuth reads the Authorization Bearer token from the request headers, cookies, or JWT on the request
     const auth = getAuth(req as any);
+
     debugLog('clerk:auth', 'getAuth() called', {
       hasAuthHeader: !!req.headers.authorization,
       authHeaderPrefix: (req.headers.authorization || '').split(' ')[0] || '',
@@ -36,13 +37,20 @@ export async function clerkAuthMiddleware(req: Request, res: Response, next: Nex
       hasUserId: !!auth?.userId,
       sid: auth?.sessionId || '',
     });
+
     if (!auth?.userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
-    const email =
-      (auth.sessionClaims as any)?.email ||
-      (auth.sessionClaims as any)?.primary_email ||
+
+    // Clerk session claims typically include email_address or a list of emails depending on configuration
+    const claims = (auth as any).sessionClaims || {};
+    const email: string =
+      claims.email ||
+      claims.email_address ||
+      claims.primary_email ||
+      (Array.isArray(claims.emails) ? claims.emails[0] : '') ||
       '';
+
     const role: 'admin' | 'user' =
       email && ADMIN_EMAILS.has(String(email).toLowerCase()) ? 'admin' : 'user';
 
@@ -51,6 +59,7 @@ export async function clerkAuthMiddleware(req: Request, res: Response, next: Nex
       email: String(email || ''),
       role,
     };
+
     debugLog('clerk:auth', 'Authenticated via Clerk', { id: req.user.id, role: req.user.role });
     return next();
   } catch (err) {
