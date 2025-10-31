@@ -7,7 +7,7 @@ import { io } from "socket.io-client";
  * A reusable hook to open an authenticated Socket.IO connection to the backend /realtime namespace.
  * - Attaches Clerk Bearer token in auth payload (from window.Clerk if available)
  * - Uses SOCKET_PATH if provided (REACT_APP_SOCKET_PATH)
- * - Auto-reconnects with backoff
+ * - Auto-reconnects with backoff and retries token on reconnect
  * - Accepts onConnect/onDisconnect and a catch-all onEvent handler
  *
  * Usage:
@@ -19,6 +19,7 @@ export default function useSocket({ onConnect, onDisconnect, onEvent } = {}) {
 
   useEffect(() => {
     const BASE_URL =
+      process.env.REACT_APP_frontend_dashboard_REACT_APP_SOCKET_URL ||
       process.env.REACT_APP_SOCKET_URL ||
       process.env.REACT_APP_API_URL ||
       "";
@@ -27,18 +28,18 @@ export default function useSocket({ onConnect, onDisconnect, onEvent } = {}) {
       console.warn(
         "Socket URL not configured (REACT_APP_SOCKET_URL or REACT_APP_API_URL). Realtime disabled."
       );
-      return;
+      return undefined;
     }
 
     const SOCKET_PATH =
+      process.env.REACT_APP_frontend_dashboard_REACT_APP_SOCKET_PATH ||
       process.env.REACT_APP_SOCKET_PATH ||
-      process.env.REACT_APP_frontend_dashboard_REACT_APP_SOCKET_PATH || // namespaced fallback
       "/socket.io";
 
     // Attempt to get Clerk session token without importing SDK here (keep hook light)
     const getAuthToken = async () => {
       try {
-        if (window && window.Clerk && window.Clerk.session) {
+        if (typeof window !== "undefined" && window.Clerk && window.Clerk.session) {
           const token = await window.Clerk.session.getToken({ template: "default" });
           return token || null;
         }
@@ -49,12 +50,17 @@ export default function useSocket({ onConnect, onDisconnect, onEvent } = {}) {
     };
 
     let cancelled = false;
+    let socket;
 
-    (async () => {
+    const connect = async () => {
       const token = await getAuthToken();
       if (cancelled) return;
 
-      const socket = io(`${String(BASE_URL).replace(/\/*$/, "")}/realtime`, {
+      // Normalize URL and namespace
+      const base = String(BASE_URL).replace(/\/*$/, "");
+      const namespace = "/realtime";
+
+      socket = io(`${base}${namespace}`, {
         path: SOCKET_PATH,
         transports: ["websocket"],
         withCredentials: true,
@@ -77,18 +83,33 @@ export default function useSocket({ onConnect, onDisconnect, onEvent } = {}) {
         onDisconnect && onDisconnect(reason);
       });
 
+      // On reconnect_attempt, try to refresh token
+      socket.io.on("reconnect_attempt", async () => {
+        const t = await getAuthToken();
+        if (t) {
+          socket.auth = { token: `Bearer ${t}` };
+          socket.io.opts.query = { ...(socket.io.opts.query || {}), token: `Bearer ${t}` };
+        }
+      });
+
       if (onEvent && typeof onEvent === "function") {
         socket.onAny((event, ...args) => {
           onEvent(event, ...args);
         });
       }
-    })();
+    };
+
+    connect();
 
     return () => {
       cancelled = true;
       if (socketRef.current) {
-        socketRef.current.removeAllListeners();
-        socketRef.current.close();
+        try {
+          socketRef.current.removeAllListeners();
+          socketRef.current.close();
+        } catch {
+          // ignore
+        }
         socketRef.current = null;
       }
     };
