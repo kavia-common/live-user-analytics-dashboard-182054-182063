@@ -2,27 +2,27 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
 
 /**
- * Resolves base URLs and paths from environment with sane defaults.
+ * Resolve base URLs and paths from environment with sane defaults.
  */
 function getSocketConfig() {
   const API_URL = process.env.REACT_APP_API_URL || process.env.REACT_APP_frontend_dashboard__REACT_APP_API_URL || '';
   const SOCKET_URL =
     process.env.REACT_APP_SOCKET_URL ||
     process.env.REACT_APP_frontend_dashboard__REACT_APP_SOCKET_URL ||
-    API_URL?.replace(/\/+$/, ''); // fallback to API_URL if provided
+    (API_URL ? API_URL.replace(/\/+$/, '') : '');
 
-  // Ensure path starts with /
+  // Ensure path starts with '/' and default to '/socket.io' for Socket.IO servers
   const rawPath =
     process.env.REACT_APP_SOCKET_PATH ||
     process.env.REACT_APP_frontend_dashboard__REACT_APP_SOCKET_PATH ||
     '/socket.io';
   const SOCKET_PATH = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
 
-  // Optional namespace; backend may mount at '/realtime' or root
+  // Optional namespace; default to root
   const NAMESPACE =
     process.env.REACT_APP_SOCKET_NAMESPACE ||
     process.env.REACT_APP_frontend_dashboard__REACT_APP_SOCKET_NAMESPACE ||
-    '/realtime'; // default to '/realtime' as backend namespace
+    '';
 
   return { SOCKET_URL, SOCKET_PATH, NAMESPACE };
 }
@@ -35,7 +35,6 @@ function getSocketConfig() {
  * - Attempts to get a Clerk token using window.Clerk if available.
  * - Sends token in auth payload and as Bearer header for proxy compatibility.
  * - Supports custom socket path and namespace via env.
- * - Gracefully no-ops if token or Clerk is not available.
  */
 export function useSocket() {
   /** This is a public hook that provides a connected Socket.IO client and helpers. */
@@ -44,14 +43,13 @@ export function useSocket() {
   const [error, setError] = useState(null);
 
   const connectSocket = useCallback(async () => {
-    // If already connected, skip
     if (socketRef.current && socketRef.current.connected) {
       return socketRef.current;
     }
 
     const { SOCKET_URL, SOCKET_PATH, NAMESPACE } = getSocketConfig();
 
-    // Attempt to retrieve a Clerk auth token; if unavailable, connect unauthenticated but restrict subscriptions
+    // Attempt to retrieve a Clerk auth token
     let token = null;
     try {
       const clerk = (typeof window !== 'undefined' && (window.Clerk || window.clerk)) || null;
@@ -59,23 +57,17 @@ export function useSocket() {
       if (session && typeof session.getToken === 'function') {
         token = await session.getToken({ template: 'default' }).catch(() => null);
       }
-    } catch (e) {
-      // no-op, will continue unauthenticated
+    } catch {
+      // continue unauthenticated
     }
 
-    // Build URL with namespace if provided
     const baseUrl = SOCKET_URL || window.location.origin;
     const url = `${baseUrl}${NAMESPACE || ''}`;
 
     setStatus('connecting');
     setError(null);
 
-    const headers = token
-      ? {
-          Authorization: `Bearer ${token}`,
-        }
-      : {};
-
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
     const auth = token ? { token } : {};
 
     const socket = io(url, {
@@ -90,7 +82,6 @@ export function useSocket() {
       auth,
     });
 
-    // Wire events
     socket.on('connect', () => {
       setStatus('connected');
       setError(null);
@@ -110,18 +101,13 @@ export function useSocket() {
   }, []);
 
   useEffect(() => {
-    // Connect on mount
-    let mounted = true;
     connectSocket();
-
     return () => {
-      mounted = false;
       if (socketRef.current) {
         try {
-          socketRef.current.offAny && socketRef.current.offAny(() => {});
           socketRef.current.removeAllListeners && socketRef.current.removeAllListeners();
           socketRef.current.disconnect();
-        } catch (e) {
+        } catch {
           // ignore
         }
         socketRef.current = null;

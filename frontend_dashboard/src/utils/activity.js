@@ -1,6 +1,12 @@
 import apiClient from "../api/client";
 import { parseUserAgent, getLocationHints } from "./device";
 
+let inFlight = false;
+let lastPathname = null;
+let suppressedUntil = 0;
+const SUPPRESS_MS_ON_ERROR = 10000; // cooldown after 401/5xx
+let pageViewTimer = null;
+
 /**
  * PUBLIC_INTERFACE
  * postActivity sends an activity event to the backend with the required schema.
@@ -9,27 +15,50 @@ import { parseUserAgent, getLocationHints } from "./device";
  *   metadata: { path, referrer, device: { ua, os, browser }, location?: { country, region, city, ip } } }
  */
 export async function postActivity(payload) {
+  const now = Date.now();
+  if (now < suppressedUntil) {
+    if (process.env.NODE_ENV !== "production") {
+      // eslint-disable-next-line no-console
+      console.warn("[activity] Suppressed due to recent server error.");
+    }
+    return;
+  }
+
+  if (inFlight) {
+    if (process.env.NODE_ENV !== "production") {
+      // eslint-disable-next-line no-console
+      console.log("[activity] Skipping because a request is in-flight.");
+    }
+    return;
+  }
+
   try {
+    inFlight = true;
     if (process.env.NODE_ENV !== "production") {
       // eslint-disable-next-line no-console
       console.log("[activity] 📤 Posting activity:", payload.type, payload?.metadata?.path);
     }
-    // Send to unified tracking endpoint
+    // apiClient has baseURL '/api' or REACT_APP_API_URL
     const response = await apiClient.post("/activities/track", payload);
     if (process.env.NODE_ENV !== "production") {
       // eslint-disable-next-line no-console
       console.log("[activity] ✓ Activity posted:", response.status);
     }
   } catch (err) {
-    // Silently fail in production; log in dev
+    const status = err?.response?.status;
+    if (status === 401 || status >= 500) {
+      suppressedUntil = Date.now() + SUPPRESS_MS_ON_ERROR;
+    }
     if (process.env.NODE_ENV !== "production") {
       // eslint-disable-next-line no-console
       console.error(
         "[activity] ✗ Failed to post activity:",
-        err?.response?.status,
+        status,
         err?.response?.data?.error || err?.message
       );
     }
+  } finally {
+    inFlight = false;
   }
 }
 
@@ -52,14 +81,23 @@ export function buildMetadata(pathname = (typeof window !== 'undefined' ? window
 
 /**
  * PUBLIC_INTERFACE
- * trackPageView posts a page_view activity for the given path.
+ * trackPageView posts a page_view activity for the given path with debounce and route guard.
  */
 export function trackPageView(pathname = (typeof window !== 'undefined' ? window.location.pathname : '/')) {
-  const metadata = buildMetadata(pathname);
-  postActivity({
-    type: "page_view",
-    metadata,
-  });
+  if (lastPathname === pathname) {
+    // only track on actual route changes
+    return;
+  }
+  lastPathname = pathname;
+
+  if (pageViewTimer) clearTimeout(pageViewTimer);
+  pageViewTimer = setTimeout(() => {
+    const metadata = buildMetadata(pathname);
+    postActivity({
+      type: "page_view",
+      metadata,
+    });
+  }, 250);
 }
 
 /**

@@ -33,10 +33,11 @@ function deriveAdminFromEmail(email) {
 
 async function fetchMe(signal) {
   try {
-    // Our backend exposes /api/auth/me (proxied by REACT_APP_API_URL base)
-    const res = await api.get('/api/auth/me', { signal });
+    // Use axios instance baseURL ('/api' by default) and call '/auth/me' to avoid double '/api/api'
+    const res = await api.get('/auth/me', { signal });
     return res?.data || null;
-  } catch {
+  } catch (e) {
+    // Do not throw; return null to avoid breaking UI on 500s
     return null;
   }
 }
@@ -49,6 +50,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
   const abortRef = useRef(null);
+  const initializedRef = useRef(false);
 
   const refresh = useCallback(async () => {
     if (abortRef.current) abortRef.current.abort();
@@ -59,13 +61,20 @@ export function AuthProvider({ children }) {
     try {
       const me = await fetchMe(controller.signal);
       setProfile(me);
+    } catch {
+      // swallow errors, keep profile as null
+      setProfile(null);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    refresh();
+    // Run once on mount
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      refresh();
+    }
     return () => {
       if (abortRef.current) abortRef.current.abort();
     };

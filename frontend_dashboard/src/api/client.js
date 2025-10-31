@@ -5,10 +5,13 @@ import axios from "axios";
  * api client
  * Axios instance pointing to backend API. Includes credentials and JSON headers.
  */
-const API_BASE_URL =
+const RAW_API_URL =
   process.env.REACT_APP_API_URL ||
   process.env.REACT_APP_frontend_dashboard__REACT_APP_API_URL ||
   "/api";
+
+// Normalize base URL to avoid double slashes and double '/api'
+const API_BASE_URL = RAW_API_URL.replace(/\/+$/, "") || "/api";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -18,10 +21,24 @@ const api = axios.create({
   },
 });
 
-// Keep a lightweight interceptor (optional if Clerk session available globally)
+// Attach Clerk token if available, but only when present
 api.interceptors.request.use(
   async (config) => {
-    // If you need to attach a Bearer token, do it here.
+    try {
+      const clerk = (typeof window !== "undefined" && (window.Clerk || window.clerk)) || null;
+      const session = clerk && clerk.session;
+      if (session && typeof session.getToken === "function") {
+        const token = await session.getToken({ template: "default" }).catch(() => null);
+        if (token) {
+          config.headers = {
+            ...(config.headers || {}),
+            Authorization: `Bearer ${token}`,
+          };
+        }
+      }
+    } catch {
+      // ignore token retrieval errors
+    }
     return config;
   },
   (error) => Promise.reject(error)
@@ -30,7 +47,9 @@ api.interceptors.request.use(
 // PUBLIC_INTERFACE
 // apiFetch helper with credentials and JSON handling
 export async function apiFetch(path, options = {}) {
-  const url = `${API_BASE_URL}${path}`;
+  const base = API_BASE_URL;
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const url = `${base}${normalizedPath}`;
   const resp = await fetch(url, {
     method: options.method || "GET",
     ...options,

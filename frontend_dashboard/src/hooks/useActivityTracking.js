@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { trackPageView, trackSessionStart, trackSessionEnd } from "../utils/activity";
 
@@ -7,26 +7,34 @@ import { trackPageView, trackSessionStart, trackSessionEnd } from "../utils/acti
  * useActivityTracking automatically tracks:
  * - session_start on mount
  * - session_end on page unload or when document becomes hidden
- * - page_view on every route change
+ * - page_view on every route change (debounced, guarded)
  * It is resilient to missing auth; the axios client will simply omit Authorization if no token is available.
  */
 export function useActivityTracking() {
   const location = useLocation();
+  const lastTrackedPathRef = useRef(null);
+  const mountedRef = useRef(false);
 
   // session_start on mount; session_end on unload/visibilitychange
   useEffect(() => {
-    // Fire session_start once per mount
-    try {
-      trackSessionStart();
-    } catch {
-      // noop
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      try {
+        trackSessionStart();
+      } catch {
+        // noop
+      }
     }
 
     const handleBeforeUnload = () => {
       try {
         // Use sendBeacon for reliability on page unload where possible
         if (navigator?.sendBeacon) {
-          const url = "/api/activities/track";
+          const urlBase =
+            (process.env.REACT_APP_API_URL ||
+              process.env.REACT_APP_frontend_dashboard__REACT_APP_API_URL ||
+              "/api").replace(/\/+$/, "");
+          const url = `${urlBase}/activities/track`;
           const metadata = {
             type: "session_end",
             metadata: {
@@ -59,7 +67,7 @@ export function useActivityTracking() {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("beforeunload", handleBeforeUnload);
-      // Also attempt a graceful session_end on unmount (SPA navigation away)
+      // Avoid duplicate session_end on SPA unmount; only send if page is actually being left
       try {
         trackSessionEnd();
       } catch {
@@ -68,10 +76,13 @@ export function useActivityTracking() {
     };
   }, []);
 
-  // Track page_view on route change
+  // Track page_view on route change - guard to avoid re-sending for same path
   useEffect(() => {
+    const pathname = location.pathname;
+    if (lastTrackedPathRef.current === pathname) return;
+    lastTrackedPathRef.current = pathname;
     try {
-      trackPageView(location.pathname);
+      trackPageView(pathname);
     } catch {
       // noop
     }

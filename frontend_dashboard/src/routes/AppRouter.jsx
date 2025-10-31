@@ -28,11 +28,11 @@ function ProtectedRoute({ children, requireAdmin = false }) {
 }
 
 export default function AppRouter() {
-  const { loading } = useAuthContext();
   useActivityTracking();
 
   return (
     <Routes>
+      {/* Public login route: show login only when signed out. Do not conditionally Navigate from here based on app auth to avoid loops. */}
       <Route
         path="/login"
         element={
@@ -40,12 +40,14 @@ export default function AppRouter() {
             <SignedOut>
               <Login />
             </SignedOut>
+            {/* When signed in, do not bounce immediately here; ProtectedRoute on '/' will handle gating */}
             <SignedIn>
               <Navigate to="/" replace />
             </SignedIn>
           </>
         }
       />
+      {/* Authenticated routes */}
       <Route
         path="/"
         element={
@@ -70,7 +72,8 @@ export default function AppRouter() {
           </ProtectedRoute>
         }
       />
-      <Route path="*" element={<Navigate to={loading ? '/login' : '/'} replace />} />
+      {/* Fallback: always go to '/' which will gate; avoid depending on loading state here */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
