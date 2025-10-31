@@ -19,49 +19,71 @@ Single-host mode is the default. The frontend calls the backend at the same orig
 - Socket.io connects to the same origin at path `/socket.io` and namespace `/realtime`
 
 Environment variables:
-- REACT_APP_CLERK_PUBLISHABLE_KEY (required) — Clerk frontend key
-- REACT_APP_API_URL — optional override of API base (default: relative `/api` using CRA proxy). Use this to avoid ad blockers by hosting backend on a different host if needed.
-- REACT_APP_SOCKET_URL — optional override WS base (default: same-origin)
-- REACT_APP_SOCKET_PATH — defaults to `/socket.io`
-- REACT_APP_ADMIN_EMAILS — optional CSV of admin emails for client-side UI gating (server is authoritative)
+- `REACT_APP_CLERK_PUBLISHABLE_KEY` — required Clerk frontend key
+- `REACT_APP_API_URL` — optional override of API base (default: relative `/api` via CRA proxy)
+- `REACT_APP_SOCKET_URL` — optional override WS base (default: same-origin)
+- `REACT_APP_SOCKET_PATH` — defaults to `/socket.io`
+- `REACT_APP_ADMIN_EMAILS` — optional CSV for UI gating only; server is source of truth
+
+Note on container_env mapping (if using container orchestration): variables like `REACT_APP_frontend_dashboard.REACT_APP_API_URL` map to the plain `REACT_APP_API_URL` used by this app.
 
 ### Clerk setup
 
 1) Create a Clerk application and get:
-- Publishable Key → set REACT_APP_CLERK_PUBLISHABLE_KEY in frontend
-- Secret Key → set CLERK_SECRET_KEY in backend
+- Publishable Key → set `REACT_APP_CLERK_PUBLISHABLE_KEY` in frontend
+- Secret Key → set `CLERK_SECRET_KEY` in backend
 
-Ensure both keys come from the SAME Clerk instance (matching environment). If your app is behind a proxy/custom domain (e.g., Vercel previews), set REACT_APP_CLERK_PROXY_URL to a path (e.g., `/clerk`) and configure your proxy accordingly to avoid `getToken 404` from accounts.dev.
+Ensure both keys come from the same Clerk project/environment. If your app is behind a proxy/custom domain (e.g., previews), you may configure Clerk proxy settings to avoid token retrieval errors.
 
-- Token retrieval uses `getToken({ template: "default" })`. If you use a custom template in Clerk, ensure the backend accepts that token accordingly.
+Token retrieval uses `getToken({ template: "default" })`. If using a custom template, ensure backend accepts/validates it.
 
-2) In Clerk dashboard, add redirect URLs for:
+2) In Clerk dashboard, add dev redirect URLs:
 - http://localhost:3000/sign-in
 - http://localhost:3000/sign-up
 
 3) In production, set the correct URLs for your domain.
 
+### Event Tracking from Frontend
+
+The frontend posts activity to `/api/activities/track`. Minimal example:
+
+```json
+{
+  "type": "page_view",
+  "metadata": {
+    "path": "/dashboard",
+    "referrer": "",
+    "device": { "ua": "Mozilla/5.0", "os": "macOS", "browser": "Chrome" }
+  }
+}
+```
+
+See `src/utils/activity.js` for helpers such as `trackPageView`, `trackSessionStart`, `trackSessionEnd`, and `trackLogin`.
+
+### Realtime configuration
+
+Socket client defaults:
+- Namespace: `/realtime`
+- Path: `REACT_APP_SOCKET_PATH` (default `/socket.io`)
+- URL: `REACT_APP_SOCKET_URL` (default same-origin), token sent via `Authorization: Bearer <jwt>` and `auth.token`.
+
 ### Cloud Preview (single-host dev)
 
-Same as before; CRA proxy is configured and websockets are proxied. Use `npm run start:preview` if needed.
-
 Fixing "Invalid Host header" in previews:
-- This repo includes a development-only `.env.development.local` that sets:
+- For local development only, you may use `.env.development.local`:
   - `DANGEROUSLY_DISABLE_HOST_CHECK=true`
   - `HOST=0.0.0.0`
   - `PORT=3000`
-- These settings allow CRA to accept non-localhost hosts used by preview environments.
-- No changes are made to production build scripts.
 
 Verify:
-- Backend running on port 4000
-- Frontend at http://localhost:3000 (or your preview URL)
-- Check: `curl http://localhost:3000/api/health` → `{ status: "ok" }`
+- Backend at http://localhost:4000
+- Frontend at http://localhost:3000
+- `curl http://localhost:3000/api/e2e/health` → `{ "status": "ok" }`
 
 ### Development proxy (local)
 
-- `"proxy": "http://localhost:4000"` forwards `/api/*` and `/socket.io/*` to backend.
-- For split-host dev, create `.env` with:
+- `"proxy": "http://localhost:4000"` forwards `/api/*` and `/socket.io/*` to the backend.
+- For split-host dev, set:
   - `REACT_APP_API_URL=http://localhost:4000`
   - `REACT_APP_SOCKET_URL=http://localhost:4000`
   - `REACT_APP_SOCKET_PATH=/socket.io`
@@ -95,8 +117,15 @@ npm run build
 - Users: Admin-only user list and role updates
 - Settings: Profile summary and theme toggle
 
+## Troubleshooting
+
+- 401 errors: ensure you are signed in and the Clerk publishable/secret keys are set correctly (frontend/backend).
+- CORS/WS failures: confirm backend `CORS_ORIGIN` includes your frontend URL and `REACT_APP_SOCKET_PATH` matches backend `SOCKET_PATH`.
+- Ad blockers: if calls to `/api/*` are blocked, set `REACT_APP_API_URL` and `REACT_APP_SOCKET_URL` to a different host.
+- Invalid Host header in previews: see Cloud Preview notes above.
+
 ## Notes
 
-- All non-auth API requests include Clerk JWT via Authorization header.
-- Socket.io connects to `/realtime` namespace; backend handshake verifies Clerk token (same-origin).
-- isAdmin is determined by backend `/api/auth/me`. For UI-only hints, you may set REACT_APP_ADMIN_EMAILS to a CSV of emails, but the server is the source of truth.
+- All non-auth API requests include a Clerk JWT via Authorization header.
+- Socket.io connects to `/realtime` namespace; backend handshake verifies Clerk token.
+- isAdmin is determined by backend `/api/auth/me`. `REACT_APP_ADMIN_EMAILS` is UI-only and not authoritative.
