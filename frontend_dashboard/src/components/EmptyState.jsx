@@ -1,13 +1,14 @@
 import React, { useState } from "react";
-import apiClient from "../api/client";
+import api from "../api/client";
 import { useAuthContext } from "../context/AuthContext";
 import "./EmptyState.css";
 
 /**
  * PUBLIC_INTERFACE
- * EmptyState displays when dashboard has no data, with seed option for admins in dev.
+ * EmptyState displays when dashboard has no data, with optional seed action for dev/admin.
+ * Supports compact variant for embedding inside cards.
  */
-export default function EmptyState({ onDataSeeded }) {
+export default function EmptyState({ onDataSeeded, compact = false }) {
   const [seeding, setSeeding] = useState(false);
   const [error, setError] = useState(null);
   const { isAdmin } = useAuthContext();
@@ -17,10 +18,7 @@ export default function EmptyState({ onDataSeeded }) {
     setSeeding(true);
     setError(null);
     try {
-      await apiClient.post("/activities/seed");
-      // eslint-disable-next-line no-console
-      console.log("[EmptyState] Sample data seeded successfully");
-      // Give backend a moment to process
+      await api.post("/api/activities/seed");
       setTimeout(() => {
         setSeeding(false);
         if (onDataSeeded) onDataSeeded();
@@ -34,7 +32,7 @@ export default function EmptyState({ onDataSeeded }) {
   };
 
   return (
-    <div className="empty-state">
+    <div className={`empty-state${compact ? " empty-state--compact" : ""}`}>
       <div className="empty-state__content">
         <div className="empty-state__icon">📊</div>
         <h2 className="empty-state__title">No Activity Data Yet</h2>
@@ -42,10 +40,10 @@ export default function EmptyState({ onDataSeeded }) {
           Your dashboard is ready! Start by navigating through the app to generate activity events,
           or wait for users to interact with your application.
         </p>
-        
+
         {isDev && isAdmin && (
           <div className="empty-state__actions">
-            <button 
+            <button
               className="empty-state__seed-btn"
               onClick={handleSeed}
               disabled={seeding}
@@ -62,12 +60,6 @@ export default function EmptyState({ onDataSeeded }) {
           <div className="empty-state__error">
             <span className="empty-state__error-icon">⚠️</span>
             <span>{error}</span>
-          </div>
-        )}
-
-        {!isDev && (
-          <div className="empty-state__production-hint">
-            <p>💡 Activity will appear here once users start interacting with your app.</p>
           </div>
         )}
       </div>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import apiClient from "../api/client";
+import api from "../api/client";
 import { useAuthContext } from "../context/AuthContext";
 import { trackPageView } from "../utils/activity";
 import Card from "../components/ui/Card";
@@ -9,38 +9,57 @@ import "./Users.css";
 
 // PUBLIC_INTERFACE
 export default function Users() {
-  /** Users management page (admin only) with role updates and pagination. */
-  const { isAdmin } = useAuthContext();
+  // Admin-only user management
+  const { isAdmin, loading: authLoading } = useAuthContext();
   const [data, setData] = useState({ items: [], total: 0, page: 1, limit: 20 });
   const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState(null);
 
   const fetchUsers = async (page = 1) => {
     setLoading(true);
+    setErr(null);
     try {
-      const { data } = await apiClient.get(`/users?page=${page}&limit=20`);
-      setData(data);
-    } catch (err) {
-      console.error("Failed to fetch users:", err);
+      const res = await api.get(`/api/users?page=${page}&limit=20`);
+      setData(res.data || { items: [], total: 0, page, limit: 20 });
+    } catch (e) {
+      setErr(e?.response?.data?.message || e.message || "Failed to load users");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (isAdmin) fetchUsers();
     // Track page view
     trackPageView("/users");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin]);
+  }, []);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (isAdmin) fetchUsers(1);
+  }, [isAdmin, authLoading]);
 
   const updateRole = async (id, role) => {
     try {
-      await apiClient.patch(`/users/${id}/role`, { role });
+      await api.patch(`/api/users/${id}/role`, { role });
       fetchUsers(data.page);
-    } catch (err) {
-      console.error("Failed to update role:", err);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error("Failed to update role:", e);
     }
   };
+
+  if (authLoading) {
+    return (
+      <div className="users">
+        <Card padding="lg">
+          <div className="users__loading">
+            <span className="users__spinner" />
+            <span>Loading...</span>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   if (!isAdmin) {
     return (
@@ -48,8 +67,8 @@ export default function Users() {
         <Card padding="lg">
           <div className="users__forbidden">
             <span className="users__forbidden-icon">🔒</span>
-            <h3>Access Denied</h3>
-            <p>This page is only accessible to administrators.</p>
+            <h3>Forbidden</h3>
+            <p>You do not have permission to view this page.</p>
           </div>
         </Card>
       </div>
@@ -72,6 +91,8 @@ export default function Users() {
             <span className="users__spinner" />
             <span>Loading users...</span>
           </div>
+        ) : err ? (
+          <div className="users__error">{err}</div>
         ) : (
           <>
             <div className="users__table-wrapper">
@@ -86,23 +107,27 @@ export default function Users() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.items.map(u => (
-                    <tr key={u.id}>
+                  {data.items.map((u) => (
+                    <tr key={u._id || u.id || u.email}>
                       <td className="users__email">{u.email}</td>
                       <td>{u.name || "—"}</td>
                       <td>
                         <Badge variant={u.role === "admin" ? "primary" : "default"}>
-                          {u.role}
+                          {u.role || "user"}
                         </Badge>
                       </td>
                       <td className="users__date">
-                        {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : "—"}
+                        {u.lastLoginAt
+                          ? new Date(u.lastLoginAt).toLocaleDateString()
+                          : "—"}
                       </td>
                       <td>
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => updateRole(u.id, u.role === "admin" ? "user" : "admin")}
+                          onClick={() =>
+                            updateRole(u._id || u.id, u.role === "admin" ? "user" : "admin")
+                          }
                         >
                           Make {u.role === "admin" ? "User" : "Admin"}
                         </Button>
@@ -120,7 +145,7 @@ export default function Users() {
                 </tbody>
               </table>
             </div>
-            
+
             <div className="users__pagination">
               <Button
                 variant="ghost"
@@ -131,7 +156,7 @@ export default function Users() {
                 ← Previous
               </Button>
               <Badge variant="default">
-                Page {data.page} of {Math.ceil(data.total / data.limit)}
+                Page {data.page} of {Math.ceil((data.total || 0) / (data.limit || 1)) || 1}
               </Badge>
               <Button
                 variant="ghost"

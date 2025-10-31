@@ -89,3 +89,24 @@
   font-size: 0.875rem;
   color: var(--text-secondary, #6b7280);
 }
+
+/* Compact variant for embedding inside chart/card bodies */
+.empty-state--compact {
+  min-height: auto;
+  padding: 0.75rem;
+}
+
+.empty-state--compact .empty-state__icon {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.empty-state--compact .empty-state__title {
+  font-size: 1rem;
+  margin-bottom: 0.25rem;
+}
+
+.empty-state--compact .empty-state__description,
+.empty-state--compact .empty-state__actions {
+  display: none;
+}

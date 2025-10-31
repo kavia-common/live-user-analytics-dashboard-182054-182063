@@ -9,9 +9,9 @@ import "./Settings.css";
 
 // PUBLIC_INTERFACE
 export default function Settings() {
-  /** Settings page with user profile and theme toggle. */
-  const { user, role } = useAuthContext();
-  const [mode, setMode] = useState(getStoredTheme());
+  // Settings page with user profile (Clerk + backend role) and theme toggle
+  const { user, role, profile, loading } = useAuthContext();
+  const [mode, setMode] = useState(getStoredTheme() || 'light');
 
   useEffect(() => {
     applyTheme(mode);
@@ -19,13 +19,26 @@ export default function Settings() {
   }, [mode]);
 
   useEffect(() => {
-    // Track page view on mount
     trackPageView("/settings");
   }, []);
 
   const toggleTheme = () => {
-    setMode(prev => prev === "light" ? "dark" : "light");
+    setMode((prev) => (prev === "light" ? "dark" : "light"));
   };
+
+  if (loading) {
+    return (
+      <div className="settings">
+        <Card className="settings__card" padding="lg">
+          <div className="settings__loading">Loading settings...</div>
+        </Card>
+      </div>
+    );
+  }
+
+  const email = profile?.clerk?.email || profile?.user?.email || user?.email || "-";
+  const name = profile?.clerk?.fullName || profile?.user?.name || user?.name || "-";
+  const clerkId = profile?.clerk?.id;
 
   return (
     <div className="settings">
@@ -39,18 +52,22 @@ export default function Settings() {
         <div className="settings__grid">
           <div className="settings__field">
             <label className="settings__label">Email</label>
-            <div className="settings__value">{user?.email}</div>
+            <div className="settings__value">{email}</div>
           </div>
           <div className="settings__field">
             <label className="settings__label">Name</label>
-            <div className="settings__value">{user?.name || "Not set"}</div>
+            <div className="settings__value">{name}</div>
           </div>
           <div className="settings__field">
             <label className="settings__label">Role</label>
-            <Badge variant={role === "admin" ? "primary" : "default"}>
-              {role}
-            </Badge>
+            <Badge variant={role === "admin" ? "primary" : "default"}>{role || "user"}</Badge>
           </div>
+          {clerkId && (
+            <div className="settings__field">
+              <label className="settings__label">Clerk ID</label>
+              <div className="settings__value">{clerkId}</div>
+            </div>
+          )}
         </div>
       </Card>
 
@@ -63,8 +80,8 @@ export default function Settings() {
               Choose between light and dark mode
             </p>
           </div>
-          <Switch 
-            checked={mode === "dark"} 
+          <Switch
+            checked={mode === "dark"}
             onChange={toggleTheme}
             aria-label="Toggle dark mode"
           />

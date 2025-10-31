@@ -2,9 +2,8 @@ import axios from "axios";
 
 /**
  * PUBLIC_INTERFACE
- * apiClient
- * Axios instance pointing to backend API. Includes credentials and, if a Clerk token is available on window,
- * attaches it as Authorization header.
+ * api client
+ * Axios instance pointing to backend API. Includes credentials and JSON headers.
  */
 const API_BASE_URL =
   process.env.REACT_APP_API_URL ||
@@ -14,57 +13,29 @@ const API_BASE_URL =
 const api = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true,
+  headers: {
+    "Content-Type": "application/json",
+  },
 });
 
+// Keep a lightweight interceptor (optional if Clerk session available globally)
 api.interceptors.request.use(
   async (config) => {
-    try {
-      const clerk = (typeof window !== "undefined" && (window.Clerk || window.clerk)) || null;
-      const session = clerk && clerk.session;
-      if (session && typeof session.getToken === "function") {
-        const token = await session.getToken({ template: "default" }).catch(() => null);
-        if (token) {
-          config.headers = {
-            ...(config.headers || {}),
-            Authorization: `Bearer ${token}`,
-          };
-        }
-      }
-    } catch (e) {
-      // ignore token fetch failures
-    }
+    // If you need to attach a Bearer token, do it here.
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-/**
- * PUBLIC_INTERFACE
- * apiFetch
- * Fetch helper that adds Clerk Bearer token if available and handles JSON bodies.
- */
+// PUBLIC_INTERFACE
+// apiFetch helper with credentials and JSON handling
 export async function apiFetch(path, options = {}) {
   const url = `${API_BASE_URL}${path}`;
-  const defaultHeaders = { "Content-Type": "application/json" };
-
-  let authHeaders = {};
-  try {
-    const clerk = (typeof window !== "undefined" && (window.Clerk || window.clerk)) || null;
-    const session = clerk && clerk.session;
-    if (session && typeof session.getToken === "function") {
-      const token = await session.getToken({ template: "default" }).catch(() => null);
-      if (token) authHeaders = { Authorization: `Bearer ${token}` };
-    }
-  } catch {
-    // graceful fallback without auth
-  }
-
   const resp = await fetch(url, {
     method: options.method || "GET",
     ...options,
     headers: {
-      ...defaultHeaders,
-      ...authHeaders,
+      "Content-Type": "application/json",
       ...(options.headers || {}),
     },
     body:

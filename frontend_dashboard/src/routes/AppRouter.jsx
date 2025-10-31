@@ -21,17 +21,14 @@ function LoadingScreen() {
 
 function ProtectedRoute({ children, requireAdmin = false }) {
   const { loading, user, isAdmin } = useAuthContext();
-
   if (loading) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
   if (requireAdmin && !isAdmin) return <Navigate to="/" replace />;
-
   return children;
 }
 
-function AppRouter() {
+export default function AppRouter() {
   const { loading } = useAuthContext();
-  // Install tracking at the router level so every route change is recorded
   useActivityTracking();
 
   return (
@@ -79,5 +76,3 @@ function AppRouter() {
     </Router>
   );
 }
-
-export default AppRouter;
