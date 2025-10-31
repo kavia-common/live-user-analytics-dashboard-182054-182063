@@ -1,119 +1,158 @@
-import { useEffect, useRef } from "react";
-import { io } from "socket.io-client";
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { io } from 'socket.io-client';
+
+/**
+ * Resolves base URLs and paths from environment with sane defaults.
+ */
+function getSocketConfig() {
+  const API_URL = process.env.REACT_APP_API_URL || process.env.REACT_APP_frontend_dashboard__REACT_APP_API_URL || '';
+  const SOCKET_URL =
+    process.env.REACT_APP_SOCKET_URL ||
+    process.env.REACT_APP_frontend_dashboard__REACT_APP_SOCKET_URL ||
+    API_URL?.replace(/\/+$/, ''); // fallback to API_URL if provided
+
+  // Ensure path starts with /
+  const rawPath =
+    process.env.REACT_APP_SOCKET_PATH ||
+    process.env.REACT_APP_frontend_dashboard__REACT_APP_SOCKET_PATH ||
+    '/socket.io';
+  const SOCKET_PATH = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
+
+  // Optional namespace; backend may mount at '/realtime' or root
+  const NAMESPACE =
+    process.env.REACT_APP_SOCKET_NAMESPACE ||
+    process.env.REACT_APP_frontend_dashboard__REACT_APP_SOCKET_NAMESPACE ||
+    ''; // e.g. '/realtime'
+
+  return { SOCKET_URL, SOCKET_PATH, NAMESPACE };
+}
 
 /**
  * PUBLIC_INTERFACE
  * useSocket
- * A reusable hook to open an authenticated Socket.IO connection to the backend /realtime namespace.
- * - Attaches Clerk Bearer token in auth payload (from window.Clerk if available)
- * - Uses SOCKET_PATH if provided (REACT_APP_SOCKET_PATH)
- * - Auto-reconnects with backoff and retries token on reconnect
- * - Accepts onConnect/onDisconnect and a catch-all onEvent handler
+ * A React hook that creates and manages a Socket.IO connection authenticated via Clerk.
  *
- * Usage:
- * const socketRef = useSocket({ onEvent: (event, payload) => {} });
- * const socket = socketRef.current;
+ * - Attempts to get a Clerk token using window.Clerk if available.
+ * - Sends token in auth payload and as Bearer header for proxy compatibility.
+ * - Supports custom socket path and namespace via env.
+ * - Gracefully no-ops if token or Clerk is not available.
  */
-export default function useSocket({ onConnect, onDisconnect, onEvent } = {}) {
+export function useSocket() {
+  /** This is a public hook that provides a connected Socket.IO client and helpers. */
   const socketRef = useRef(null);
+  const [status, setStatus] = useState('disconnected'); // 'connecting' | 'connected' | 'disconnected' | 'error'
+  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const BASE_URL =
-      process.env.REACT_APP_frontend_dashboard_REACT_APP_SOCKET_URL ||
-      process.env.REACT_APP_SOCKET_URL ||
-      process.env.REACT_APP_API_URL ||
-      "";
-
-    if (!BASE_URL) {
-      console.warn(
-        "Socket URL not configured (REACT_APP_SOCKET_URL or REACT_APP_API_URL). Realtime disabled."
-      );
-      return undefined;
+  const connectSocket = useCallback(async () => {
+    // If already connected, skip
+    if (socketRef.current && socketRef.current.connected) {
+      return socketRef.current;
     }
 
-    const SOCKET_PATH =
-      process.env.REACT_APP_frontend_dashboard_REACT_APP_SOCKET_PATH ||
-      process.env.REACT_APP_SOCKET_PATH ||
-      "/socket.io";
+    const { SOCKET_URL, SOCKET_PATH, NAMESPACE } = getSocketConfig();
 
-    // Attempt to get Clerk session token without importing SDK here (keep hook light)
-    const getAuthToken = async () => {
-      try {
-        if (typeof window !== "undefined" && window.Clerk && window.Clerk.session) {
-          const token = await window.Clerk.session.getToken({ template: "default" });
-          return token || null;
-        }
-      } catch (e) {
-        console.warn("[useSocket] Clerk token fetch failed:", e?.message || e);
+    // Attempt to retrieve a Clerk auth token; if unavailable, connect unauthenticated but restrict subscriptions
+    let token = null;
+    try {
+      const clerk = window.Clerk || (window && window.clerk);
+      if (clerk && clerk.session && typeof clerk.session.getToken === 'function') {
+        token = await clerk.session.getToken({ template: 'default' }).catch(() => null);
       }
-      return null;
-    };
+    } catch (e) {
+      // no-op, will continue unauthenticated
+    }
 
-    let cancelled = false;
-    let socket;
+    // Build URL with namespace if provided
+    const baseUrl = SOCKET_URL || window.location.origin;
+    const url = `${baseUrl}${NAMESPACE || ''}`;
 
-    const connect = async () => {
-      const token = await getAuthToken();
-      if (cancelled) return;
+    setStatus('connecting');
+    setError(null);
 
-      // Normalize URL and namespace
-      const base = String(BASE_URL).replace(/\/*$/, "");
-      const namespace = "/realtime";
-
-      socket = io(`${base}${namespace}`, {
-        path: SOCKET_PATH,
-        transports: ["websocket"],
-        withCredentials: true,
-        reconnection: true,
-        reconnectionAttempts: Infinity,
-        reconnectionDelay: 500,
-        reconnectionDelayMax: 5000,
-        // Provide token both in auth and query for broader backend compatibility
-        auth: token ? { token: `Bearer ${token}` } : {},
-        query: token ? { token: `Bearer ${token}` } : {},
-      });
-
-      socketRef.current = socket;
-
-      socket.on("connect", () => {
-        onConnect && onConnect(socket);
-      });
-
-      socket.on("disconnect", (reason) => {
-        onDisconnect && onDisconnect(reason);
-      });
-
-      // On reconnect_attempt, try to refresh token
-      socket.io.on("reconnect_attempt", async () => {
-        const t = await getAuthToken();
-        if (t) {
-          socket.auth = { token: `Bearer ${t}` };
-          socket.io.opts.query = { ...(socket.io.opts.query || {}), token: `Bearer ${t}` };
+    const headers = token
+      ? {
+          Authorization: `Bearer ${token}`,
         }
-      });
+      : {};
 
-      if (onEvent && typeof onEvent === "function") {
-        socket.onAny((event, ...args) => {
-          onEvent(event, ...args);
-        });
-      }
-    };
+    const auth = token ? { token } : {};
 
-    connect();
+    const socket = io(url, {
+      path: SOCKET_PATH,
+      transports: ['websocket', 'polling'],
+      withCredentials: true,
+      autoConnect: true,
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      extraHeaders: headers,
+      auth,
+    });
+
+    // Wire events
+    socket.on('connect', () => {
+      setStatus('connected');
+      setError(null);
+    });
+
+    socket.on('connect_error', (err) => {
+      setStatus('error');
+      setError(err?.message || 'Socket connection error');
+    });
+
+    socket.on('disconnect', () => {
+      setStatus('disconnected');
+    });
+
+    socketRef.current = socket;
+    return socket;
+  }, []);
+
+  useEffect(() => {
+    // Connect on mount
+    let mounted = true;
+    connectSocket();
 
     return () => {
-      cancelled = true;
+      mounted = false;
       if (socketRef.current) {
         try {
-          socketRef.current.removeAllListeners();
-          socketRef.current.close();
-        } catch {
+          socketRef.current.offAny && socketRef.current.offAny(() => {});
+          socketRef.current.removeAllListeners && socketRef.current.removeAllListeners();
+          socketRef.current.disconnect();
+        } catch (e) {
           // ignore
         }
         socketRef.current = null;
       }
     };
-  }, [onConnect, onDisconnect, onEvent]);
+  }, [connectSocket]);
 
-  return socketRef;
+  // PUBLIC_INTERFACE
+  const subscribe = useCallback((event, handler) => {
+    /** Subscribe to a socket event safely. */
+    if (!socketRef.current) return () => {};
+    socketRef.current.on(event, handler);
+    return () => {
+      if (!socketRef.current) return;
+      socketRef.current.off(event, handler);
+    };
+  }, []);
+
+  // PUBLIC_INTERFACE
+  const emit = useCallback((event, payload) => {
+    /** Emit a socket event safely. */
+    if (!socketRef.current) return;
+    socketRef.current.emit(event, payload);
+  }, []);
+
+  return {
+    socket: socketRef.current,
+    status,
+    error,
+    subscribe,
+    emit,
+  };
 }
+
+export default useSocket;

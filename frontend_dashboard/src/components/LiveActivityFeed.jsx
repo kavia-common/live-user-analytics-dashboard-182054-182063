@@ -7,7 +7,7 @@ import useSocket from "../hooks/useSocket";
  * PUBLIC_INTERFACE
  * LiveActivityFeed
  * Subscribes to 'activity:new' and renders newest events at the top.
- * Loads an initial page of activities on mount. Debounces bursty inserts to reduce layout thrash.
+ * Loads an initial page of activities on mount. Debounces bursty inserts.
  */
 export default function LiveActivityFeed() {
   const [events, setEvents] = useState([]);
@@ -37,13 +37,7 @@ export default function LiveActivityFeed() {
     [flushBuffer]
   );
 
-  const socketRef = useSocket({
-    onEvent: (event, payload) => {
-      if (event === "activity:new") {
-        enqueueEvent(payload);
-      }
-    },
-  });
+  const { subscribe } = useSocket();
 
   const loadInitial = useCallback(async () => {
     try {
@@ -54,12 +48,13 @@ export default function LiveActivityFeed() {
         (await apiClient.get("/activities/recent?limit=30").catch(() => null));
 
       const data =
-        res?.data?.items || // newer API
-        res?.data || // simple array fallback
+        res?.data?.items || // possible envelope
+        res?.data || // raw array
         [];
 
       setEvents(Array.isArray(data) ? data : []);
     } catch (e) {
+      // eslint-disable-next-line no-console
       console.error("[LiveActivityFeed] Failed to load initial activity", e);
     } finally {
       setLoading(false);
@@ -75,16 +70,12 @@ export default function LiveActivityFeed() {
   }, [loadInitial]);
 
   useEffect(() => {
-    const socket = socketRef.current;
-    if (!socket) return;
-
-    const handler = (payload) => enqueueEvent(payload);
-    socket.on("activity:new", handler);
-
+    // Subscribe using hook
+    const unsubscribe = subscribe("activity:new", (payload) => enqueueEvent(payload));
     return () => {
-      socket.off("activity:new", handler);
+      unsubscribe && unsubscribe();
     };
-  }, [socketRef, enqueueEvent]);
+  }, [subscribe, enqueueEvent]);
 
   if (loading) {
     return <div className="live-activity-feed">Loading activity…</div>;
@@ -96,23 +87,18 @@ export default function LiveActivityFeed() {
 
   return (
     <div className="live-activity-feed">
-      {events.map((e, idx) => (
-        <div key={e._id || e.id || `${e.type}-${e.timestamp || e.occurredAt}-${idx}`} className="feed-item">
-          <div className="feed-item-header">
-            <span className="feed-type">{e.type}</span>
-            <span className="feed-time">
+      <div className="live-activity-header">Live Activity</div>
+      <ul className="live-activity-list">
+        {events.map((e, idx) => (
+          <li key={e._id || e.id || `${e.type}-${e.timestamp || e.occurredAt}-${idx}`} className="live-activity-item">
+            <div className="live-activity-title">{e.title || e.type || "Event"}</div>
+            <div className="live-activity-meta">
+              {(e.user && (e.user.email || e.user.id)) || e.userId || "anonymous"} •{" "}
               {e.timestamp || e.occurredAt ? new Date(e.timestamp || e.occurredAt).toLocaleString() : ""}
-            </span>
-          </div>
-          <div className="feed-body">
-            <div className="feed-user">{e.user?.email || e.userId || e.user?.id}</div>
-            <div className="feed-meta">
-              <span>{e.device?.type || e.device?.deviceType}</span>
-              <span>{e.location?.city || e.location?.country}</span>
             </div>
-          </div>
-        </div>
-      ))}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

@@ -7,8 +7,25 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { useAuth, useUser } from '@clerk/clerk-react';
 import apiClient from '../api/client';
+
+// Attempt to import Clerk hooks if available, otherwise create no-op replacements
+let useAuthHook;
+let useUserHook;
+try {
+  // eslint-disable-next-line global-require
+  const clerk = require('@clerk/clerk-react');
+  useAuthHook = clerk.useAuth;
+  useUserHook = clerk.useUser;
+} catch {
+  useAuthHook = () => ({
+    isLoaded: true,
+    isSignedIn: false,
+    getToken: async () => null,
+    signOut: async () => {},
+  });
+  useUserHook = () => ({ isLoaded: true, user: null });
+}
 
 // PUBLIC_INTERFACE
 // AuthContextValue shape exposed to the app.
@@ -34,9 +51,7 @@ async function fetchMe(signal) {
   try {
     const res = await apiClient.get('/auth/me', { signal });
     return res?.data || null;
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.warn('Failed to fetch /api/auth/me', err?.response?.status, err?.message);
+  } catch {
     return null;
   }
 }
@@ -44,8 +59,8 @@ async function fetchMe(signal) {
 // PUBLIC_INTERFACE
 // AuthProvider provides Clerk + backend derived auth state.
 export function AuthProvider({ children }) {
-  const { isLoaded: authLoaded, getToken, isSignedIn, signOut } = useAuth();
-  const { isLoaded: userLoaded, user: clerkUser } = useUser();
+  const { isLoaded: authLoaded, getToken, isSignedIn, signOut } = useAuthHook();
+  const { isLoaded: userLoaded, user: clerkUser } = useUserHook();
 
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState(null);
@@ -60,7 +75,7 @@ export function AuthProvider({ children }) {
     setLoading(true);
     try {
       let t = null;
-      if (authLoaded && isSignedIn) {
+      if (authLoaded && isSignedIn && typeof getToken === 'function') {
         try {
           t = await getToken({ template: 'default' }).catch(() => null);
         } catch {
@@ -120,7 +135,7 @@ export function AuthProvider({ children }) {
     const isAdmin = role === 'admin';
     const user = (id || email) ? { id, email } : null;
 
-    return { user, role, token, isAdmin, loading, refresh, signOut };
+    return { user, role, token, isAdmin, loading, refresh, signOut: async () => { try { await (typeof signOut === 'function' ? signOut() : Promise.resolve()); } catch {} } };
   }, [backendUser, clerkUser, token, loading, signOut]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

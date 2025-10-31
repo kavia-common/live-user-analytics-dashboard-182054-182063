@@ -36,11 +36,12 @@ export default function Dashboard() {
         apiClient.get("/stats/devices").then((r) => r.data),
         apiClient.get("/stats/locations").then((r) => r.data),
       ]);
-      setOverview(ovr);
-      setTimeseries(ts);
-      setDevices(dev);
-      setLocations(loc);
+      setOverview(ovr || {});
+      setTimeseries(ts || []);
+      setDevices(dev || []);
+      setLocations(loc || []);
     } catch (e) {
+      // eslint-disable-next-line no-console
       console.error("[Dashboard] Failed to fetch stats", e);
     } finally {
       setLoading(false);
@@ -65,47 +66,33 @@ export default function Dashboard() {
     };
   }, [fetchStats]);
 
-  // Wire up socket events and catch-all handler
-  const socketRef = useSocket({
-    onConnect: () => {
-      debouncedRefresh();
-    },
-    onDisconnect: () => {},
-    onEvent: (eventName) => {
-      if (eventName === "stats:update") {
-        debouncedRefresh();
-      }
-    },
-  });
+  // Wire up socket events
+  const { subscribe } = useSocket();
 
-  // Direct subscription as a safeguard
   useEffect(() => {
-    const socket = socketRef.current;
-    if (!socket) return;
-
-    const handler = () => debouncedRefresh();
-    socket.on("stats:update", handler);
-
+    const unsubscribe = subscribe("stats:update", () => {
+      debouncedRefresh();
+    });
     return () => {
-      socket.off("stats:update", handler);
+      unsubscribe && unsubscribe();
     };
-  }, [socketRef, debouncedRefresh]);
+  }, [subscribe, debouncedRefresh]);
 
   const cards = useMemo(() => {
-    if (!overview) return [];
+    const ov = overview || {};
     return [
-      { label: "Active Users", value: overview.activeUsers || 0 },
-      { label: "Total Sessions", value: overview.totalSessions || 0 },
-      { label: "Page Views", value: overview.pageViews || 0 },
-      { label: "Conversion Rate", value: `${overview.conversionRate || 0}%` },
+      { label: "Active Sessions", value: ov.activeSessions ?? 0 },
+      { label: "Users Online", value: ov.usersOnline ?? 0 },
+      { label: "Page Views", value: ov.pageViews ?? 0 },
+      { label: "Errors", value: ov.errors ?? 0 },
     ];
   }, [overview]);
 
   return (
-    <div className="dashboard-container">
+    <div className="dashboard">
       <div className="stats-grid">
         {cards.map((c) => (
-          <StatCard key={c.label} label={c.label} value={c.value} loading={loading} />
+          <StatCard key={c.label} title={c.label} value={c.value} loading={loading} />
         ))}
       </div>
 
@@ -121,9 +108,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="live-feed-card">
-        <LiveActivityFeed />
-      </div>
+      <LiveActivityFeed />
     </div>
   );
 }

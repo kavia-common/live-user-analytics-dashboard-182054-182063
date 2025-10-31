@@ -2,55 +2,39 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
-import { ClerkProvider } from '@clerk/clerk-react';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 
-function NoopClerkProvider({ children }) {
-  return children;
-}
-
-// PUBLIC_INTERFACE
-// initClerkProviderProps derives props for ClerkProvider from environment.
-function initClerkProviderProps() {
+// Try to require ClerkProvider; if unavailable, use a Noop provider
+let ProviderComponent = React.Fragment;
+let providerProps = {};
+try {
+  // eslint-disable-next-line global-require
+  const { ClerkProvider } = require('@clerk/clerk-react');
   const publishableKey = process.env.REACT_APP_CLERK_PUBLISHABLE_KEY;
-  const proxyUrl = process.env.REACT_APP_CLERK_PROXY_URL || undefined;
-
-  if (!publishableKey && process.env.NODE_ENV !== 'production') {
-    // eslint-disable-next-line no-console
-    console.warn(
-      'REACT_APP_CLERK_PUBLISHABLE_KEY is not set. Running with NoopClerkProvider for development.'
-    );
-  }
-
-  if (!publishableKey) return { ProviderComponent: NoopClerkProvider, props: {} };
-
-  return {
-    ProviderComponent: ClerkProvider,
-    props: {
+  if (ClerkProvider && publishableKey) {
+    ProviderComponent = ClerkProvider;
+    providerProps = {
       publishableKey,
-      proxyUrl,
+      afterSignInUrl: '/',
+      afterSignUpUrl: '/',
       navigate: (to) => {
         try {
           window.history.pushState(null, '', to);
           window.dispatchEvent(new PopStateEvent('popstate'));
-        } catch (e) {
-          // eslint-disable-next-line no-console
-          console.debug('[ClerkProvider:navigate] fallback replace to', to, e);
-          window.location.replace(to);
+        } catch {
+          window.location.assign(to);
         }
       },
-      afterSignInUrl: '/',
-      afterSignUpUrl: '/',
-    },
-  };
+    };
+  }
+} catch {
+  // no clerk installed, continue with fragment provider
 }
-
-const { ProviderComponent, props } = initClerkProviderProps();
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
-  <ProviderComponent {...props}>
+  <ProviderComponent {...providerProps}>
     <BrowserRouter>
       <AuthProvider>
         <App />
