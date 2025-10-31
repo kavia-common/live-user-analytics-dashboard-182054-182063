@@ -16,6 +16,7 @@ export function getApiBaseUrl() {
 let authTokenProvider = null;
 
 // PUBLIC_INTERFACE
+// setAuthTokenProvider allows setting a function that returns the latest token.
 export function setAuthTokenProvider(providerFn) {
   authTokenProvider = providerFn;
 }
@@ -25,7 +26,7 @@ const apiClient = axios.create({
   withCredentials: false,
 });
 
-// Request interceptor to inject Authorization header with Clerk token if available
+// Inject Authorization header on every request with the freshest token
 apiClient.interceptors.request.use(
   async (config) => {
     try {
@@ -38,14 +39,14 @@ apiClient.interceptors.request.use(
         }
       }
     } catch {
-      // ignore token errors for request and proceed without Authorization
+      // ignore token retrieval errors
     }
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// Basic response handling; allow caller to handle 401/403
+// Pass through responses; errors handled by callers
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => Promise.reject(error)

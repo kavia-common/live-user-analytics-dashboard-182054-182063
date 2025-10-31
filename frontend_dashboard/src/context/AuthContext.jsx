@@ -2,11 +2,8 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { useAuth, useUser } from '@clerk/clerk-react';
 import apiClient, { setAuthTokenProvider } from '../api/client';
 
-/**
- * PUBLIC_INTERFACE
- * AuthContextValue
- * This defines the shape of the authentication context exposed to the app.
- */
+// PUBLIC_INTERFACE
+// AuthContextValue shape exposed to the app.
 const AuthContext = createContext({
   user: null,
   role: null,
@@ -16,10 +13,6 @@ const AuthContext = createContext({
   refresh: async () => {},
 });
 
-/**
- * deriveAdminFromEmail
- * Helper to determine admin role based on allowed admin emails from env.
- */
 function deriveAdminFromEmail(email) {
   const admins = (process.env.REACT_APP_ADMIN_EMAILS || '')
     .split(',')
@@ -29,10 +22,6 @@ function deriveAdminFromEmail(email) {
   return admins.includes(email.toLowerCase());
 }
 
-/**
- * fetchMe
- * Calls backend /api/auth/me to resolve user profile and role.
- */
 async function fetchMe(signal) {
   try {
     const res = await apiClient.get('/auth/me', { signal });
@@ -44,11 +33,8 @@ async function fetchMe(signal) {
   }
 }
 
-/**
- * PUBLIC_INTERFACE
- * AuthProvider
- * Provides authentication data synced with Clerk and backend to the React tree.
- */
+// PUBLIC_INTERFACE
+// AuthProvider provides Clerk + backend derived auth state.
 export function AuthProvider({ children }) {
   const { isLoaded: authLoaded, getToken, isSignedIn, signOut } = useAuth();
   const { isLoaded: userLoaded, user: clerkUser } = useUser();
@@ -58,12 +44,11 @@ export function AuthProvider({ children }) {
   const [backendUser, setBackendUser] = useState(null);
   const abortRef = useRef(null);
 
-  // Provide token to axios interceptor via callback so it stays fresh
+  // Keep axios token fresh via provider callback
   useEffect(() => {
     setAuthTokenProvider(async () => {
       if (!authLoaded || !isSignedIn) return null;
       try {
-        // Use default template if configured, else basic getToken
         const t = await getToken().catch(() => null);
         return t || null;
       } catch {
@@ -89,12 +74,10 @@ export function AuthProvider({ children }) {
       }
       setToken(t);
 
-      // Fetch backend identity if signed in
       let me = null;
       if (t) {
         me = await fetchMe(controller.signal);
       }
-      // Fallback derive minimal info from Clerk if backend does not have it yet
       if (!me && clerkUser) {
         me = {
           id: clerkUser.id,
@@ -108,17 +91,16 @@ export function AuthProvider({ children }) {
     }
   }, [authLoaded, isSignedIn, getToken, clerkUser]);
 
-  // Sync on initial load and when Clerk auth or user changes
+  // Subscribe to Clerk changes
   useEffect(() => {
     if (!authLoaded || !userLoaded) return;
     refresh();
-    // Cleanup on unmount
     return () => {
       if (abortRef.current) abortRef.current.abort();
     };
   }, [authLoaded, userLoaded, isSignedIn, clerkUser, refresh]);
 
-  // If user signs out, clear state
+  // Clear on sign-out
   useEffect(() => {
     if (authLoaded && !isSignedIn) {
       setBackendUser(null);
@@ -132,27 +114,16 @@ export function AuthProvider({ children }) {
     const email = backendUser?.email || clerkUser?.primaryEmailAddress?.emailAddress || null;
     const role = backendUser?.role || (deriveAdminFromEmail(email) ? 'admin' : 'user');
     const isAdmin = role === 'admin';
-    const user = id || email ? { id, email } : null;
+    const user = (id || email) ? { id, email } : null;
 
-    return {
-      user,
-      role,
-      token,
-      isAdmin,
-      loading,
-      refresh,
-      signOut,
-    };
+    return { user, role, token, isAdmin, loading, refresh, signOut };
   }, [backendUser, clerkUser, token, loading, signOut]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-/**
- * PUBLIC_INTERFACE
- * useAuthContext
- * Hook to access AuthContext.
- */
+// PUBLIC_INTERFACE
+// useAuthContext provides access to AuthContext.
 export function useAuthContext() {
   return useContext(AuthContext);
 }
