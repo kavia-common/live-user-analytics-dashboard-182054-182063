@@ -20,7 +20,7 @@ If your frontend and backend run on different origins, you can override defaults
 
 Create a `.env` from `.env.example` and set only what you need.
 
-## Development with CRA Proxy
+## Development with CRA Proxy and Preview Hosts
 
 For local development, CRA can proxy API and Socket.IO to your backend:
 - Ensure `proxy` is set in `package.json`:
@@ -31,6 +31,11 @@ For local development, CRA can proxy API and Socket.IO to your backend:
 Then the frontend calls `/api/*` and connects to Socket.IO on the same origin (`localhost:3000`), which CRA proxies to `localhost:4000`.
 
 Note: Do not hardcode backend URLs in code. Use relative paths and the environment variables above if needed.
+
+### Preview/Container Environments
+Some preview systems inject HOST=0.0.0.0 or enforce non-localhost host headers. Use:
+- npm run start:preview
+This sets HOST=0.0.0.0 and disables host checks for CRA so port 3000 becomes ready.
 
 ## Environment
 

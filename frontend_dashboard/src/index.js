@@ -10,7 +10,9 @@ import { AuthProvider } from './context/AuthContext';
 // Entrypoint: Mounts ClerkProvider around the app with routing enabled.
 // Reads Clerk publishable key from environment.
 const PUBLISHABLE_KEY =
+  // Standard CRA variable
   process.env.REACT_APP_CLERK_PUBLISHABLE_KEY ||
+  // Some orchestrators may map namespaced vars into plain CRA env
   process.env.REACT_APP_REACT_APP_CLERK_PUBLISHABLE_KEY;
 
 if (!PUBLISHABLE_KEY) {
