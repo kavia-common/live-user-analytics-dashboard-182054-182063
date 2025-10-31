@@ -42,10 +42,10 @@ export default function LiveActivityFeed() {
   const loadInitial = useCallback(async () => {
     try {
       setLoading(true);
-      // allow either /activities or /activities/recent depending on backend
+      // Use normalized paths; try /activities then fallback to /activities/recent
       const res =
-        (await apiClient.get("/api/activities?limit=30").catch(() => null)) ||
-        (await apiClient.get("/api/activities/recent?limit=30").catch(() => null));
+        (await apiClient.get("/activities?limit=30").catch(() => null)) ||
+        (await apiClient.get("/activities/recent?limit=30").catch(() => null));
 
       const data =
         res?.data?.items || // possible envelope

@@ -1,6 +1,5 @@
-import React from 'react';
-import { Routes, Route } from 'react-router-dom';
-import { SignedOut } from '@clerk/clerk-react';
+import React, { useEffect } from 'react';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import Dashboard from '../pages/Dashboard';
 import Users from '../pages/Users';
 import Settings from '../pages/Settings';
@@ -8,6 +7,11 @@ import Login from '../pages/Login';
 import { useAuthContext } from '../context/AuthContext';
 import { useActivityTracking } from '../hooks/useActivityTracking';
 
+/**
+ * AppRouter handles top-level routing with guarded navigation that avoids loops.
+ * Uses isSignedIn (derived from user presence) and current path to only navigate
+ * when the destination differs, preventing circular redirects and render churn.
+ */
 function LoadingScreen() {
   return (
     <div style={{ display: 'grid', placeItems: 'center', height: '100vh', color: '#6b7280' }}>
@@ -19,68 +23,52 @@ function LoadingScreen() {
   );
 }
 
-function ProtectedRoute({ children, requireAdmin = false }) {
-  const { loading, user, isAdmin } = useAuthContext();
-  if (loading) return <LoadingScreen />;
-  if (!user) return <div style={{ padding: 24 }}><LoadingScreen /></div>;
-  if (requireAdmin && !isAdmin) {
-    return <div style={{ padding: 24 }}>You do not have access to this page.</div>;
-  }
-  return children;
-}
-
-function NotFound() {
-  return (
-    <div style={{ display: 'grid', placeItems: 'center', height: '100vh', color: '#6b7280' }}>
-      <div>
-        <div style={{ fontSize: 20, fontWeight: 700 }}>404 - Not Found</div>
-        <div style={{ fontSize: 14, marginTop: 6 }}>The page you are looking for doesn’t exist.</div>
-      </div>
-    </div>
-  );
-}
-
 export default function AppRouter() {
-  useActivityTracking();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { loading, user } = useAuthContext();
+  const isSignedIn = !!user;
+
+  // Temporarily keep activity tracking hook; it is internally no-op stubbed elsewhere if disabled
+  useActivityTracking(true);
+
+  useEffect(() => {
+    if (loading) return;
+    const path = location.pathname;
+
+    if (isSignedIn) {
+      if (path === '/login' || path === '/') {
+        navigate('/dashboard', { replace: true });
+      }
+    } else {
+      if (!path.startsWith('/login')) {
+        navigate('/login', { replace: true });
+      }
+    }
+  }, [isSignedIn, loading, navigate, location.pathname]);
+
+  if (loading) return <LoadingScreen />;
 
   return (
     <Routes>
-      {/* Public login route: show login only when signed out */}
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route
         path="/login"
-        element={
-          <SignedOut>
-            <Login />
-          </SignedOut>
-        }
+        element={isSignedIn ? <Navigate to="/dashboard" replace /> : <Login />}
       />
-      {/* Authenticated routes */}
       <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        }
+        path="/dashboard"
+        element={isSignedIn ? <Dashboard /> : <Navigate to="/login" replace />}
       />
       <Route
         path="/users"
-        element={
-          <ProtectedRoute requireAdmin>
-            <Users />
-          </ProtectedRoute>
-        }
+        element={isSignedIn ? <Users /> : <Navigate to="/login" replace />}
       />
       <Route
         path="/settings"
-        element={
-          <ProtectedRoute>
-            <Settings />
-          </ProtectedRoute>
-        }
+        element={isSignedIn ? <Settings /> : <Navigate to="/login" replace />}
       />
-      {/* Catch-all 404 without redirects */}
-      <Route path="*" element={<NotFound />} />
+      <Route path="*" element={<Navigate to={isSignedIn ? '/dashboard' : '/login'} replace />} />
     </Routes>
   );
 }

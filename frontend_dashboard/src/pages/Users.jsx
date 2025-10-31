@@ -80,7 +80,6 @@ export default function Users() {
       <header className="users__header">
         <div>
           <h1 className="users__title">Users</h1>
-          <p className="users__subtitle">Manage user accounts and roles</p>
         </div>
         <Badge variant="info">{data.total} total users</Badge>
       </header>
@@ -162,7 +161,7 @@ export default function Users() {
                 variant="ghost"
                 size="sm"
                 onClick={() => fetchUsers(data.page + 1)}
-                disabled={(data.page * data.limit) >= data.total}
+                disabled={data.page * data.limit >= data.total}
               >
                 Next →
               </Button>

@@ -38,7 +38,7 @@ async function fetchMe(signal) {
     const res = await api.get('/auth/me', { signal });
     return res?.data || null;
   } catch (e) {
-    // Do not throw; return null to avoid breaking UI on 500s
+    // Return null on failure so we can fallback to Clerk without breaking UI
     return null;
   }
 }
@@ -46,6 +46,7 @@ async function fetchMe(signal) {
 /**
  * PUBLIC_INTERFACE
  * AuthProvider fetches backend profile and exposes user, role, isAdmin, loading, and refresh.
+ * It gracefully falls back to Clerk if backend is unavailable and always clears loading.
  */
 export function AuthProvider({ children }) {
   const { isLoaded, isSignedIn, user: clerkUser } = useAuth();
@@ -69,6 +70,7 @@ export function AuthProvider({ children }) {
     safeSetState(() => setLoading(true));
     try {
       const me = await fetchMe(controller.signal);
+      // me may be null if backend is down; store as null and let memo derive from Clerk
       safeSetState(() => setProfile(me));
     } catch {
       safeSetState(() => setProfile(null));
@@ -77,7 +79,7 @@ export function AuthProvider({ children }) {
     }
   }, [safeSetState]);
 
-  // Effect A: Wait for Clerk to finish loading before fetching backend profile.
+  // Effect: Wait for Clerk to finish loading before fetching backend profile.
   useEffect(() => {
     const changed =
       lastClerkStateRef.current.isLoaded !== isLoaded ||
@@ -110,14 +112,11 @@ export function AuthProvider({ children }) {
   }, []);
 
   const value = useMemo(() => {
+    // Prefer backend identity when available; otherwise fallback to Clerk user
     const clerkEmail =
-      (clerkUser?.primaryEmailAddress?.emailAddress) ||
-      (clerkUser?.emailAddresses?.[0]?.emailAddress);
-    const backendEmail =
-      profile?.clerk?.email ||
-      profile?.user?.email ||
-      profile?.email ||
-      null;
+      clerkUser?.primaryEmailAddress?.emailAddress ||
+      clerkUser?.emailAddresses?.[0]?.emailAddress;
+    const backendEmail = profile?.clerk?.email || profile?.user?.email || profile?.email || null;
     const email = backendEmail || clerkEmail || null;
 
     const id =
@@ -133,7 +132,9 @@ export function AuthProvider({ children }) {
       (deriveAdminFromEmail(email) ? 'admin' : 'user');
 
     const isAdmin = role === 'admin';
-    const user = (email || id) ? { id, email, name: profile?.user?.name || profile?.name || clerkUser?.fullName } : null;
+    const user = (email || id)
+      ? { id, email, name: profile?.user?.name || profile?.name || clerkUser?.fullName }
+      : null;
 
     return {
       user,

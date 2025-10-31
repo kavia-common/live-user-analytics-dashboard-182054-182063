@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios from 'axios';
 
 /**
  * PUBLIC_INTERFACE
@@ -10,34 +10,64 @@ import axios from "axios";
  * Overrides:
  *  - REACT_APP_API_URL can be set to a full URL (e.g., https://api.example.com or https://api.example.com/api)
  * Notes:
- *  - Do not append '/api' here. Use '/api/...' in call sites to avoid double-prefix issues.
+ *  - Do not append '/api' inside baseURL. Use '/api/...' in call sites or normalize via interceptors below.
  */
-const RAW_API_URL = (process.env.REACT_APP_API_URL || "").trim();
+const RAW_API_URL = (process.env.REACT_APP_API_URL || '').trim();
+
+/**
+ * PUBLIC_INTERFACE
+ * rawBaseUrl
+ * Returns normalized base URL string used for fetch calls.
+ * Default is '' (same-origin). If REACT_APP_API_URL is set, trailing slashes are trimmed.
+ */
+export function rawBaseUrl() {
+  const override = RAW_API_URL;
+  if (override) {
+    return override.replace(/\/+$/, '');
+  }
+  return '';
+}
 
 // Normalize override; if not provided, use same-origin by leaving baseURL as ''
-let baseURL = RAW_API_URL || "";
+let baseURL = RAW_API_URL || '';
 
 // Remove trailing slash(es) to avoid '//' when joining
-if (baseURL.endsWith("/")) {
-  baseURL = baseURL.replace(/\/+$/, "");
+if (baseURL.endsWith('/')) {
+  baseURL = baseURL.replace(/\/+$/, '');
 }
 
 const api = axios.create({
   baseURL, // '' for same-origin, or override from REACT_APP_API_URL
   withCredentials: true,
   headers: {
-    "Content-Type": "application/json",
+    'Content-Type': 'application/json',
   },
+});
+
+// Interceptor to ensure we don't end up with double '/api' when baseURL includes '/api'
+api.interceptors.request.use((config) => {
+  try {
+    const url = typeof config.url === 'string' ? config.url : '';
+    const baseEndsWithApi = baseURL.endsWith('/api');
+    const urlStartsWithApi = url.startsWith('/api/');
+    if (baseEndsWithApi && urlStartsWithApi) {
+      // remove leading '/api' from request url if base already includes it
+      config.url = url.replace(/^\/api/, '');
+    }
+  } catch {
+    // ignore normalization errors
+  }
+  return config;
 });
 
 // Attach Clerk token if available, but only when present
 api.interceptors.request.use(
   async (config) => {
     try {
-      const clerk = (typeof window !== "undefined" && (window.Clerk || window.clerk)) || null;
+      const clerk = (typeof window !== 'undefined' && (window.Clerk || window.clerk)) || null;
       const session = clerk && clerk.session;
-      if (session && typeof session.getToken === "function") {
-        const token = await session.getToken({ template: "default" }).catch(() => null);
+      if (session && typeof session.getToken === 'function') {
+        const token = await session.getToken({ template: 'default' }).catch(() => null);
         if (token) {
           config.headers = {
             ...(config.headers || {}),
@@ -59,20 +89,20 @@ api.interceptors.request.use(
  * Use with path starting with '/api/...'
  */
 export async function apiFetch(path, options = {}) {
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   const url = `${baseURL}${normalizedPath}`;
   const resp = await fetch(url, {
-    method: options.method || "GET",
+    method: options.method || 'GET',
     ...options,
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
       ...(options.headers || {}),
     },
     body:
-      options.body && typeof options.body !== "string"
+      options.body && typeof options.body !== 'string'
         ? JSON.stringify(options.body)
         : options.body,
-    credentials: "include",
+    credentials: 'include',
   });
 
   if (!resp.ok) {
@@ -83,8 +113,8 @@ export async function apiFetch(path, options = {}) {
     } catch {}
     throw new Error(message);
   }
-  const contentType = resp.headers.get("content-type") || "";
-  if (contentType.includes("application/json")) {
+  const contentType = resp.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
     return resp.json();
   }
   return resp.text();
