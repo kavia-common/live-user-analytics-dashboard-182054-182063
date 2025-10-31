@@ -22,7 +22,7 @@ function getSocketConfig() {
   const NAMESPACE =
     process.env.REACT_APP_SOCKET_NAMESPACE ||
     process.env.REACT_APP_frontend_dashboard__REACT_APP_SOCKET_NAMESPACE ||
-    ''; // e.g. '/realtime'
+    '/realtime'; // default to '/realtime' as backend namespace
 
   return { SOCKET_URL, SOCKET_PATH, NAMESPACE };
 }
@@ -54,9 +54,10 @@ export function useSocket() {
     // Attempt to retrieve a Clerk auth token; if unavailable, connect unauthenticated but restrict subscriptions
     let token = null;
     try {
-      const clerk = window.Clerk || (window && window.clerk);
-      if (clerk && clerk.session && typeof clerk.session.getToken === 'function') {
-        token = await clerk.session.getToken({ template: 'default' }).catch(() => null);
+      const clerk = (typeof window !== 'undefined' && (window.Clerk || window.clerk)) || null;
+      const session = clerk && clerk.session;
+      if (session && typeof session.getToken === 'function') {
+        token = await session.getToken({ template: 'default' }).catch(() => null);
       }
     } catch (e) {
       // no-op, will continue unauthenticated
