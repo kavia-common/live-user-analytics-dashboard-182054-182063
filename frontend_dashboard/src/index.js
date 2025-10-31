@@ -4,6 +4,7 @@ import './index.css';
 import App from './App';
 import { ClerkProvider } from '@clerk/clerk-react';
 import { BrowserRouter } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
 
 // In development, allow app to render without Clerk publishable key by using a no-op provider.
 function NoopClerkProvider({ children }) {
@@ -11,9 +12,7 @@ function NoopClerkProvider({ children }) {
 }
 
 /**
- * Wrap app with ClerkProvider using publishable key from env.
- * If Clerk is not configured in development, the UI will still render and API calls will
- * fall back to unauthenticated dev mocks for core dashboard views.
+ * Wrap app with ClerkProvider using publishable key from env and provide AuthProvider.
  */
 const PUBLISHABLE_KEY = process.env.REACT_APP_CLERK_PUBLISHABLE_KEY;
 const CLERK_PROXY_URL = process.env.REACT_APP_CLERK_PROXY_URL || undefined;
@@ -34,8 +33,6 @@ root.render(
           proxyUrl: CLERK_PROXY_URL,
           navigate: (to) => {
             try {
-              // Centralized navigation for Clerk hosted components.
-              // Prefer Router-aware method by dispatching a popstate after pushState.
               window.history.pushState(null, '', to);
               window.dispatchEvent(new PopStateEvent('popstate'));
             } catch (e) {
@@ -44,14 +41,15 @@ root.render(
               window.location.replace(to);
             }
           },
-          // After sign in/sign up, Clerk will route to dashboard (root path).
           afterSignInUrl: '/',
           afterSignUpUrl: '/',
         }
       : {})}
   >
     <BrowserRouter>
-      <App />
+      <AuthProvider>
+        <App />
+      </AuthProvider>
     </BrowserRouter>
   </ProviderComponent>
 );

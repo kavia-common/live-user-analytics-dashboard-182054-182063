@@ -1,5 +1,5 @@
 import React from "react";
-import { useAuth } from "../../context/AuthContext";
+import { useAuthContext } from "../../context/AuthContext";
 import Badge from "../ui/Badge";
 import Button from "../ui/Button";
 import "./Header.css";
@@ -7,7 +7,7 @@ import "./Header.css";
 // PUBLIC_INTERFACE
 export default function Header() {
   /** Header component with search, user info, and logout button. */
-  const { user, logout } = useAuth();
+  const { user, signOut } = useAuthContext();
 
   return (
     <header className="header">
@@ -20,7 +20,7 @@ export default function Header() {
         <Badge variant="primary" icon="👤">
           {user?.email || "Account"}
         </Badge>
-        <Button variant="ghost" size="sm" onClick={logout}>
+        <Button variant="ghost" size="sm" onClick={signOut}>
           Logout
         </Button>
       </div>

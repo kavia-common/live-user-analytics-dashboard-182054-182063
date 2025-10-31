@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { api } from "../api/client";
+import apiClient from "../api/client";
 import { useSocket } from "../hooks/useSocket";
 import Card from "./ui/Card";
 import Badge from "./ui/Badge";
@@ -17,7 +17,7 @@ export default function LiveActivityFeed() {
     let mounted = true;
     (async () => {
       try {
-        const { data } = await api.get("/activities/recent?limit=25");
+        const { data } = await apiClient.get("/activities/recent?limit=25");
         if (mounted) setItems(data.items || []);
       } catch {
         // ignore

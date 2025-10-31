@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { api } from "../api/client";
-import { useAuth } from "../context/AuthContext";
+import apiClient from "../api/client";
+import { useAuthContext } from "../context/AuthContext";
 import "./EmptyState.css";
 
 /**
@@ -10,14 +10,14 @@ import "./EmptyState.css";
 export default function EmptyState({ onDataSeeded }) {
   const [seeding, setSeeding] = useState(false);
   const [error, setError] = useState(null);
-  const { isAdmin } = useAuth();
+  const { isAdmin } = useAuthContext();
   const isDev = process.env.NODE_ENV !== "production";
 
   const handleSeed = async () => {
     setSeeding(true);
     setError(null);
     try {
-      await api.post("/activities/seed");
+      await apiClient.post("/activities/seed");
       // eslint-disable-next-line no-console
       console.log("[EmptyState] Sample data seeded successfully");
       // Give backend a moment to process

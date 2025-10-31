@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useAuth } from "../context/AuthContext";
+import { useAuthContext } from "../context/AuthContext";
 import { trackPageView } from "../utils/activity";
 import { applyTheme, getStoredTheme, storeTheme } from "../utils/theme";
 import Card from "../components/ui/Card";
@@ -10,7 +10,7 @@ import "./Settings.css";
 // PUBLIC_INTERFACE
 export default function Settings() {
   /** Settings page with user profile and theme toggle. */
-  const { user } = useAuth();
+  const { user, role } = useAuthContext();
   const [mode, setMode] = useState(getStoredTheme());
 
   useEffect(() => {
@@ -47,8 +47,8 @@ export default function Settings() {
           </div>
           <div className="settings__field">
             <label className="settings__label">Role</label>
-            <Badge variant={user?.role === "admin" ? "primary" : "default"}>
-              {user?.role}
+            <Badge variant={role === "admin" ? "primary" : "default"}>
+              {role}
             </Badge>
           </div>
         </div>

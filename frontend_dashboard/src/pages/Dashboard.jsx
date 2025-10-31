@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { api } from "../api/client";
+import apiClient from "../api/client";
 import StatCard from "../components/StatCard";
 import LineChart from "../components/charts/LineChart";
 import BarChart from "../components/charts/BarChart";
@@ -27,10 +27,10 @@ export default function Dashboard() {
     setFetchError(null);
     try {
       const [ov, ts, dev, loc] = await Promise.all([
-        api.get("/stats/overview?sinceMinutes=60"),
-        api.get("/stats/timeseries?intervalMinutes=5&totalMinutes=60"),
-        api.get("/stats/devices?sinceMinutes=60"),
-        api.get("/stats/locations?sinceMinutes=60"),
+        apiClient.get("/stats/overview?sinceMinutes=60"),
+        apiClient.get("/stats/timeseries?intervalMinutes=5&totalMinutes=60"),
+        apiClient.get("/stats/devices?sinceMinutes=60"),
+        apiClient.get("/stats/locations?sinceMinutes=60"),
       ]);
       setOverview(ov.data);
       setSeries(ts.data.series || []);

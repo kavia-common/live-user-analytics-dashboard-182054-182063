@@ -1,139 +1,160 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { api } from "../api/client";
-import { useAuth as useClerkAuth, useUser as useClerkUser } from "@clerk/clerk-react";
-
-// PUBLIC_INTERFACE
-export const AuthContext = createContext(null);
-
-// Internal singleton to allow api client to retrieve Clerk token without circular imports
-let tokenProviderRef = { current: null };
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useAuth, useUser } from '@clerk/clerk-react';
+import apiClient, { setAuthTokenProvider } from '../api/client';
 
 /**
  * PUBLIC_INTERFACE
- * getClerkTokenProvider returns a function that yields a fresh Clerk JWT.
+ * AuthContextValue
+ * This defines the shape of the authentication context exposed to the app.
  */
-export function getClerkTokenProvider() {
-  return tokenProviderRef.current;
+const AuthContext = createContext({
+  user: null,
+  role: null,
+  token: null,
+  isAdmin: false,
+  loading: true,
+  refresh: async () => {},
+});
+
+/**
+ * deriveAdminFromEmail
+ * Helper to determine admin role based on allowed admin emails from env.
+ */
+function deriveAdminFromEmail(email) {
+  const admins = (process.env.REACT_APP_ADMIN_EMAILS || '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  if (!email) return false;
+  return admins.includes(email.toLowerCase());
+}
+
+/**
+ * fetchMe
+ * Calls backend /api/auth/me to resolve user profile and role.
+ */
+async function fetchMe(signal) {
+  try {
+    const res = await apiClient.get('/auth/me', { signal });
+    return res?.data || null;
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('Failed to fetch /api/auth/me', err?.response?.status, err?.message);
+    return null;
+  }
 }
 
 /**
  * PUBLIC_INTERFACE
- * AuthProvider sources auth state from Clerk and augments with backend role.
+ * AuthProvider
+ * Provides authentication data synced with Clerk and backend to the React tree.
  */
 export function AuthProvider({ children }) {
-  // If ClerkProvider is a no-op (dev without key), these hooks still exist but may return undefined.
-  const clerkAuth = useClerkAuth?.() || {};
-  const clerkUserHook = useClerkUser?.() || {};
-  const { isSignedIn = false, getToken = async () => null, signOut = async () => {}, isLoaded: clerkAuthLoaded = true } = clerkAuth;
-  const { user: clerkUser = null, isLoaded: clerkUserLoaded = true } = clerkUserHook;
-  const [role, setRole] = useState("user");
-  const [fetchingRole, setFetchingRole] = useState(false);
+  const { isLoaded: authLoaded, getToken, isSignedIn, signOut } = useAuth();
+  const { isLoaded: userLoaded, user: clerkUser } = useUser();
 
-  // expose token provider for API client
+  const [loading, setLoading] = useState(true);
+  const [token, setToken] = useState(null);
+  const [backendUser, setBackendUser] = useState(null);
+  const abortRef = useRef(null);
+
+  // Provide token to axios interceptor via callback so it stays fresh
   useEffect(() => {
-    tokenProviderRef.current = async () => {
+    setAuthTokenProvider(async () => {
+      if (!authLoaded || !isSignedIn) return null;
       try {
-        const t = await getToken({ template: "default" });
-        // eslint-disable-next-line no-console
-        console.debug("[AuthProvider] getToken ->", t ? `...(len=${String(t).length})` : "null");
-        return t;
-      } catch (e) {
-        // eslint-disable-next-line no-console
-        console.debug("[AuthProvider] getToken error", e);
+        // Use default template if configured, else basic getToken
+        const t = await getToken().catch(() => null);
+        return t || null;
+      } catch {
         return null;
       }
-    };
-    return () => {
-      tokenProviderRef.current = null;
-    };
-  }, [getToken]);
+    });
+  }, [authLoaded, isSignedIn, getToken]);
 
-  // Fetch role from backend /api/auth/me (source of truth)
-  useEffect(() => {
-    const loadRole = async () => {
-      if (!isSignedIn) {
-        setRole("user");
-        return;
-      }
-      setFetchingRole(true);
-      try {
-        // Ensure Clerk is loaded before calling backend
-        const tokenCheck = await tokenProviderRef.current?.();
-        // eslint-disable-next-line no-console
-        console.debug("[AuthProvider] Clerk loaded:", { clerkAuthLoaded, clerkUserLoaded, hasToken: !!tokenCheck });
-        const { data } = await api.get("/auth/me");
-        // eslint-disable-next-line no-console
-        console.debug("[AuthProvider] /api/auth/me ->", data);
-        if (data?.user?.role) {
-          setRole(data.user.role);
-        } else {
-          const adminEmails = (process.env.REACT_APP_ADMIN_EMAILS || "")
-            .split(",")
-            .map((s) => s.trim().toLowerCase())
-            .filter(Boolean);
-          const email = clerkUser?.primaryEmailAddress?.emailAddress?.toLowerCase?.();
-          setRole(email && adminEmails.includes(email) ? "admin" : "user");
-        }
-      } catch (e) {
-        // eslint-disable-next-line no-console
-        console.debug("[AuthProvider] /api/auth/me failed, inferring role from env", e);
-        const adminEmails = (process.env.REACT_APP_ADMIN_EMAILS || "")
-          .split(",")
-          .map((s) => s.trim().toLowerCase())
-          .filter(Boolean);
-        const email = clerkUser?.primaryEmailAddress?.emailAddress?.toLowerCase?.();
-        setRole(email && adminEmails.includes(email) ? "admin" : "user");
-      } finally {
-        setFetchingRole(false);
-      }
-    };
-    if (clerkAuthLoaded && clerkUserLoaded) {
-      loadRole();
-    } else if (process.env.NODE_ENV !== "production") {
-      // Dev fallback: allow UI to render with inferred role even if Clerk hasn't fully loaded
-      const adminEmails = (process.env.REACT_APP_ADMIN_EMAILS || "")
-        .split(",")
-        .map((s) => s.trim().toLowerCase())
-        .filter(Boolean);
-      const email = clerkUser?.primaryEmailAddress?.emailAddress?.toLowerCase?.();
-      setRole(email && adminEmails.includes(email) ? "admin" : "user");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSignedIn, clerkAuthLoaded, clerkUserLoaded]);
+  const refresh = useCallback(async () => {
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
 
-  const value = useMemo(
-    () => ({
-      isAuthenticated: !!isSignedIn,
-      user: clerkUser
-        ? {
-            id: clerkUser.id,
-            email: clerkUser.primaryEmailAddress?.emailAddress || "",
-            name: clerkUser.fullName || clerkUser.username || "",
-            role,
-          }
-        : null,
-      isAdmin: role === "admin",
-      loading: !clerkAuthLoaded || !clerkUserLoaded || fetchingRole,
-      logout: () => signOut().catch(() => {}),
-      // PUBLIC_INTERFACE
-      async getToken() {
-        /** Returns a fresh Clerk session JWT. */
+    setLoading(true);
+    try {
+      let t = null;
+      if (authLoaded && isSignedIn) {
         try {
-          const t = await getToken({ template: "default" });
-          return t || null;
+          t = await getToken().catch(() => null);
         } catch {
-          return null;
+          t = null;
         }
-      },
-    }),
-    [isSignedIn, clerkUser, role, fetchingRole, getToken, signOut, clerkAuthLoaded, clerkUserLoaded]
-  );
+      }
+      setToken(t);
+
+      // Fetch backend identity if signed in
+      let me = null;
+      if (t) {
+        me = await fetchMe(controller.signal);
+      }
+      // Fallback derive minimal info from Clerk if backend does not have it yet
+      if (!me && clerkUser) {
+        me = {
+          id: clerkUser.id,
+          email: clerkUser.primaryEmailAddress?.emailAddress || null,
+          role: deriveAdminFromEmail(clerkUser.primaryEmailAddress?.emailAddress) ? 'admin' : 'user',
+        };
+      }
+      setBackendUser(me || null);
+    } finally {
+      setLoading(false);
+    }
+  }, [authLoaded, isSignedIn, getToken, clerkUser]);
+
+  // Sync on initial load and when Clerk auth or user changes
+  useEffect(() => {
+    if (!authLoaded || !userLoaded) return;
+    refresh();
+    // Cleanup on unmount
+    return () => {
+      if (abortRef.current) abortRef.current.abort();
+    };
+  }, [authLoaded, userLoaded, isSignedIn, clerkUser, refresh]);
+
+  // If user signs out, clear state
+  useEffect(() => {
+    if (authLoaded && !isSignedIn) {
+      setBackendUser(null);
+      setToken(null);
+      setLoading(false);
+    }
+  }, [authLoaded, isSignedIn]);
+
+  const value = useMemo(() => {
+    const id = backendUser?.id || null;
+    const email = backendUser?.email || clerkUser?.primaryEmailAddress?.emailAddress || null;
+    const role = backendUser?.role || (deriveAdminFromEmail(email) ? 'admin' : 'user');
+    const isAdmin = role === 'admin';
+    const user = id || email ? { id, email } : null;
+
+    return {
+      user,
+      role,
+      token,
+      isAdmin,
+      loading,
+      refresh,
+      signOut,
+    };
+  }, [backendUser, clerkUser, token, loading, signOut]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-// PUBLIC_INTERFACE
-export function useAuth() {
-  /** Returns the auth context value. */
+/**
+ * PUBLIC_INTERFACE
+ * useAuthContext
+ * Hook to access AuthContext.
+ */
+export function useAuthContext() {
   return useContext(AuthContext);
 }
+
+export default AuthContext;

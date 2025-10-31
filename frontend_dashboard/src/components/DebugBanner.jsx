@@ -1,33 +1,22 @@
 import React, { useState, useEffect } from "react";
 import "./DebugBanner.css";
-import { wasBlockedByClient } from "../api/client";
 
 /**
  * PUBLIC_INTERFACE
- * DebugBanner shows a non-intrusive banner when auth or connection issues are detected in dev.
+ * DebugBanner shows a non-intrusive banner in development.
+ * Currently displays nothing by default; can be extended to watch other app signals.
  */
 export default function DebugBanner() {
   const [visible, setVisible] = useState(false);
   const [issue, setIssue] = useState(null);
 
   useEffect(() => {
-    // Check for common issues periodically
-    const checkIssues = () => {
-      const isBlocked = wasBlockedByClient();
-      
-      if (isBlocked) {
-        setIssue({
-          type: "blocked",
-          message: "Ad blocker detected. Stats endpoints may be blocked. Using fallback data.",
-          level: "warning"
-        });
-        setVisible(true);
-      }
-    };
-
-    checkIssues();
-    const interval = setInterval(checkIssues, 5000);
-    return () => clearInterval(interval);
+    if (process.env.NODE_ENV !== "production") {
+      // Placeholder: no automatic checks for now.
+      // To manually show in development, setVisible(true) and set an issue message.
+      // setIssue({ type: "info", message: "Development mode active.", level: "info" });
+      // setVisible(true);
+    }
   }, []);
 
   if (!visible || process.env.NODE_ENV === "production") return null;
@@ -39,8 +28,8 @@ export default function DebugBanner() {
           {issue?.level === "error" ? "⚠️" : issue?.level === "warning" ? "⚡" : "ℹ️"}
         </span>
         <span className="debug-banner__message">{issue?.message}</span>
-        <button 
-          className="debug-banner__close" 
+        <button
+          className="debug-banner__close"
           onClick={() => setVisible(false)}
           aria-label="Close"
         >

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
-import { getClerkTokenProvider } from "../context/AuthContext";
+import { useAuthContext } from "../context/AuthContext";
 
 /**
  * PUBLIC_INTERFACE
@@ -28,23 +28,20 @@ export function useSocket() {
 
       const SOCKET_PATH = process.env.REACT_APP_SOCKET_PATH || "/socket.io";
 
-      const getToken = getClerkTokenProvider();
-      if (!getToken) {
+      // Pull fresh token from AuthContext; may be null in dev or before auth is ready
+      const { token } = useAuthContext();
+      let authHeader = undefined;
+      if (token) {
+        authHeader = { token: `Bearer ${token}` };
+      } else if (process.env.NODE_ENV !== "production") {
         // eslint-disable-next-line no-console
-        console.debug("[socket] No token provider yet; skipping connect");
-        return;
-      }
-      const token = await getToken();
-      if (!token || cancelled) {
-        // eslint-disable-next-line no-console
-        console.debug("[socket] Token unavailable or effect cancelled; skipping connect");
-        return;
+        console.debug("[socket] No auth token available; connecting without auth (dev)");
       }
 
       const s = io(url, {
         path: SOCKET_PATH,
         transports: ["websocket"],
-        auth: { token: `Bearer ${token}` },
+        auth: authHeader,
       });
       socketRef.current = s;
 

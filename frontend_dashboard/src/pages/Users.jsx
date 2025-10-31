@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { api } from "../api/client";
-import { useAuth } from "../context/AuthContext";
+import apiClient from "../api/client";
+import { useAuthContext } from "../context/AuthContext";
 import { trackPageView } from "../utils/activity";
 import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
@@ -10,14 +10,14 @@ import "./Users.css";
 // PUBLIC_INTERFACE
 export default function Users() {
   /** Users management page (admin only) with role updates and pagination. */
-  const { isAdmin } = useAuth();
+  const { isAdmin } = useAuthContext();
   const [data, setData] = useState({ items: [], total: 0, page: 1, limit: 20 });
   const [loading, setLoading] = useState(false);
 
   const fetchUsers = async (page = 1) => {
     setLoading(true);
     try {
-      const { data } = await api.get(`/users?page=${page}&limit=20`);
+      const { data } = await apiClient.get(`/users?page=${page}&limit=20`);
       setData(data);
     } catch (err) {
       console.error("Failed to fetch users:", err);
@@ -35,7 +35,7 @@ export default function Users() {
 
   const updateRole = async (id, role) => {
     try {
-      await api.patch(`/users/${id}/role`, { role });
+      await apiClient.patch(`/users/${id}/role`, { role });
       fetchUsers(data.page);
     } catch (err) {
       console.error("Failed to update role:", err);

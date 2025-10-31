@@ -1,4 +1,4 @@
-import { api } from "../api/client";
+import apiClient from "../api/client";
 
 /**
  * PUBLIC_INTERFACE
@@ -16,7 +16,7 @@ export async function postActivity(payload) {
       // eslint-disable-next-line no-console
       console.log("[activity] 📤 Posting activity:", payload.type, payload.page);
     }
-    const response = await api.post("/activities", payload);
+    const response = await apiClient.post("/activities", payload);
     if (process.env.NODE_ENV !== "production") {
       // eslint-disable-next-line no-console
       console.log("[activity] ✓ Activity posted:", response.status);
