@@ -16,15 +16,13 @@ export function useSocket() {
     let cancelled = false;
 
     (async () => {
-      // Resolve base URL: prefer socket URL, then API URL; include composite fallbacks
-      const directSocket = process.env.REACT_APP_SOCKET_URL || process.env["REACT_APP_frontend_dashboard.REACT_APP_SOCKET_URL"];
-      const directApi = process.env.REACT_APP_API_URL || process.env["REACT_APP_frontend_dashboard.REACT_APP_API_URL"];
+      // Resolve base URL: prefer standardized CRA envs; fall back to same-origin (CRA proxy)
+      const directSocket = process.env.REACT_APP_SOCKET_URL;
+      const directApi = process.env.REACT_APP_API_URL;
       const explicitBase = directSocket || directApi || null;
-      const url = explicitBase ? `${String(explicitBase).replace(/\/+$/, "")}/realtime` : undefined;
-      const SOCKET_PATH =
-        process.env.REACT_APP_SOCKET_PATH ||
-        process.env["REACT_APP_frontend_dashboard.REACT_APP_SOCKET_PATH"] ||
-        "/socket.io";
+      const url = explicitBase ? `${String(explicitBase).replace(/\/*$/, "")}/realtime` : undefined;
+
+      const SOCKET_PATH = process.env.REACT_APP_SOCKET_PATH || "/socket.io";
 
       const getToken = getClerkTokenProvider();
       if (!getToken) {

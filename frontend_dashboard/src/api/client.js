@@ -6,10 +6,8 @@ import { getClerkTokenProvider } from "../context/AuthContext";
  * getApiBaseUrl resolves the API base URL from environment with sane defaults.
  */
 export function getApiBaseUrl() {
-  // Prefer explicit envs; support orchestrator composite var too.
-  const direct =
-    process.env.REACT_APP_API_URL ||
-    process.env["REACT_APP_frontend_dashboard.REACT_APP_API_URL"];
+  // Prefer explicit envs; standardized CRA-style variable
+  const direct = process.env.REACT_APP_API_URL;
   // Fallback to same-origin via CRA proxy in dev
   const base = direct && String(direct).trim().length ? direct : "";
   const normalized = base ? base.replace(/\/*$/, "") : "";
