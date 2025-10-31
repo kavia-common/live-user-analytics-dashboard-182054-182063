@@ -8,15 +8,15 @@ import 'dotenv/config';
  * Required:
  * - MONGODB_URI
  * - CLERK_SECRET_KEY (for Clerk JWT verification in API and Socket.io)
- * - CORS_ORIGIN (CSV list of allowed origins) → defaults to http://localhost:3000 in dev
  *
  * Optional:
+ * - CORS_ORIGIN (CSV list) → defaults to http://localhost:3000 in non-prod
  * - PORT → default 4000
  * - SOCKET_PATH → default /socket.io
  * - NODE_ENV → default development
  * - ADMIN_EMAILS → CSV of admin emails used for role mapping
  * - LOCAL_JWT_AUTH → default false; when true, enables legacy local auth endpoints (dev only)
- * - JWT_SECRET → required only when LOCAL_JWT_AUTH=true or when running e2e dev memory endpoints
+ * - JWT_SECRET → required only when LOCAL_JWT_AUTH=true
  * - CLERK_JWT_ISSUER → optional issuer override if using a custom Clerk JWT template
  */
 export function getEnv() {

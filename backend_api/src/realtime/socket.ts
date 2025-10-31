@@ -31,7 +31,6 @@ export function initSocket(httpServer: HttpServer, corsOrigin: string | string[]
   // Clerk auth middleware for namespace
   realtime.use((socket: Socket, next) => {
     try {
-      // Extract token from common places used by clients
       const tokenFromQuery = socket.handshake.query?.token as string | undefined;
       const authHeader = (socket.handshake.auth?.token as string | undefined) || (socket.handshake.headers['authorization'] as string | undefined);
       let bearer = tokenFromQuery || authHeader || '';
@@ -47,7 +46,6 @@ export function initSocket(httpServer: HttpServer, corsOrigin: string | string[]
         return next(new Error('Unauthorized: Missing token'));
       }
 
-      // Build a mock request to pass to Clerk getAuth, which looks at headers
       const fakeReq: any = {
         headers: {
           authorization: `Bearer ${bearer}`,
@@ -77,7 +75,6 @@ export function initSocket(httpServer: HttpServer, corsOrigin: string | string[]
   });
 
   realtime.on('connection', (socket) => {
-    // Emit a handshake confirmation
     socket.emit('connected', { message: 'Realtime connected' });
 
     socket.on('disconnect', () => {

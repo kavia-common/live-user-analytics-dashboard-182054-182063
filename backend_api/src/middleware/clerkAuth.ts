@@ -26,7 +26,6 @@ declare global {
 export async function clerkAuthMiddleware(req: Request, res: Response, next: NextFunction) {
   const { ADMIN_EMAILS } = getEnv();
   try {
-    // getAuth reads the Authorization Bearer token from the request headers, cookies, or JWT on the request
     const auth = getAuth(req as any);
 
     debugLog('clerk:auth', 'getAuth() called', {
@@ -42,7 +41,6 @@ export async function clerkAuthMiddleware(req: Request, res: Response, next: Nex
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    // Clerk session claims typically include email_address or a list of emails depending on configuration
     const claims = (auth as any).sessionClaims || {};
     const email: string =
       claims.email ||

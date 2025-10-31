@@ -46,7 +46,6 @@ export function createApp() {
   };
 
   app.use(cors(corsOptions));
-  // Pre-handle OPTIONS for all routes explicitly with same options
   app.options('*', cors(corsOptions));
 
   app.use(express.json({ limit: '1mb' }));
@@ -95,16 +94,14 @@ export function createApp() {
   app.use('/api/users', usersRoutes);
   app.use('/api/activities', activitiesRoutes);
   app.use('/api/stats', statsRoutes);
-  // Minimal E2E routes for health and dev-only auth isolation
   app.use('/api/e2e', e2eRoutes);
 
-  // Ensure unknown /api routes return JSON 404 (not HTML) to avoid XML/HTML parsing issues
+  // Ensure unknown /api routes return JSON 404 (not HTML)
   app.use('/api', (req: Request, res: Response) => {
     res.type('application/json');
     return res.status(404).json({ error: 'Not Found' });
   });
 
-  // For any non-API unknown route, also return JSON (prevents HTML default)
   app.use((req: Request, res: Response) => {
     res.type('application/json');
     return res.status(404).json({ error: 'Not Found' });
