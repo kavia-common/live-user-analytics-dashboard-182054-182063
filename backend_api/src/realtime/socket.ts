@@ -31,14 +31,18 @@ export function initSocket(httpServer: HttpServer, corsOrigin: string | string[]
   // Clerk auth middleware for namespace
   realtime.use((socket: Socket, next) => {
     try {
-      const tokenFromQuery = socket.handshake.query?.token as string | undefined;
-      const authHeader = (socket.handshake.auth?.token as string | undefined) || (socket.handshake.headers['authorization'] as string | undefined);
-      let bearer = tokenFromQuery || authHeader || '';
+      const tokenFromQuery = (socket.handshake.query?.token as string | undefined) || '';
+      const authHeaderToken = (socket.handshake.auth?.token as string | undefined) || '';
+      const headerAuth = (socket.handshake.headers?.authorization as string | undefined) || '';
+
+      // Prefer explicit auth token, then query, then header
+      let bearer = authHeaderToken || tokenFromQuery || headerAuth || '';
+      if (typeof bearer !== 'string') bearer = '';
       if (bearer?.startsWith('Bearer ')) bearer = bearer.substring(7);
 
       debugLog('socket:auth', 'Verifying Clerk token (namespace middleware)', {
         hasQueryToken: !!tokenFromQuery,
-        hasAuthHeader: !!authHeader,
+        hasAuthHeader: !!authHeaderToken || !!headerAuth,
         tokenLength: bearer ? bearer.length : 0,
       });
 
@@ -74,6 +78,7 @@ export function initSocket(httpServer: HttpServer, corsOrigin: string | string[]
     }
   });
 
+  // All clients must be Clerk-authenticated at this point
   realtime.on('connection', (socket) => {
     socket.emit('connected', { message: 'Realtime connected' });
 

@@ -7,6 +7,11 @@ import { initSocket } from './realtime/socket.js';
 import { startChangeStreams } from './realtime/changeStreams.js';
 import { debugLog, debugError } from './utils/debug.js';
 
+/**
+ * PUBLIC_INTERFACE
+ * Bootstrap the HTTP server, mount Express, configure Socket.io at SOCKET_PATH with Clerk-authenticated
+ * namespace '/realtime', connect to MongoDB, and start change stream watchers after DB connection.
+ */
 async function bootstrap() {
   const { PORT, CORS_ORIGIN, SOCKET_PATH, NODE_ENV } = getEnv();
 
