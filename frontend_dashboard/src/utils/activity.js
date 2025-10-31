@@ -1,22 +1,21 @@
 import apiClient from "../api/client";
+import { parseUserAgent, getLocationHints } from "./device";
 
 /**
  * PUBLIC_INTERFACE
- * postActivity sends an activity event to the backend.
- * @param {Object} payload - Activity event payload
- * @param {string} payload.type - Event type: login, logout, page_view, click, navigation
- * @param {string} [payload.page] - Page path
- * @param {Object} [payload.device] - Device info (os, browser, deviceType)
- * @param {Object} [payload.location] - Location info (country, region, city)
- * @param {Object} [payload.metadata] - Additional metadata
+ * postActivity sends an activity event to the backend with the required schema.
+ * Payload format:
+ * { type: 'page_view'|'login'|'session_start'|'session_end',
+ *   metadata: { path, referrer, device: { ua, os, browser }, location?: { country, region, city, ip } } }
  */
 export async function postActivity(payload) {
   try {
     if (process.env.NODE_ENV !== "production") {
       // eslint-disable-next-line no-console
-      console.log("[activity] 📤 Posting activity:", payload.type, payload.page);
+      console.log("[activity] 📤 Posting activity:", payload.type, payload?.metadata?.path);
     }
-    const response = await apiClient.post("/activities", payload);
+    // Send to unified tracking endpoint
+    const response = await apiClient.post("/activities/track", payload);
     if (process.env.NODE_ENV !== "production") {
       // eslint-disable-next-line no-console
       console.log("[activity] ✓ Activity posted:", response.status);
@@ -25,53 +24,65 @@ export async function postActivity(payload) {
     // Silently fail in production; log in dev
     if (process.env.NODE_ENV !== "production") {
       // eslint-disable-next-line no-console
-      console.error("[activity] ✗ Failed to post activity:", err?.response?.status, err?.response?.data?.error || err?.message);
+      console.error(
+        "[activity] ✗ Failed to post activity:",
+        err?.response?.status,
+        err?.response?.data?.error || err?.message
+      );
     }
   }
 }
 
 /**
  * PUBLIC_INTERFACE
- * detectDevice returns basic device information from user agent.
+ * buildMetadata constructs the metadata object for activity tracking.
  */
-export function detectDevice() {
-  const ua = navigator.userAgent || "";
-  let os = "Unknown";
-  let browser = "Unknown";
-  let deviceType = "desktop";
-
-  // Detect OS
-  if (/Windows/i.test(ua)) os = "Windows";
-  else if (/Mac/i.test(ua)) os = "macOS";
-  else if (/Linux/i.test(ua)) os = "Linux";
-  else if (/Android/i.test(ua)) os = "Android";
-  else if (/iOS|iPhone|iPad|iPod/i.test(ua)) os = "iOS";
-
-  // Detect Browser
-  if (/Chrome/i.test(ua) && !/Edg/i.test(ua)) browser = "Chrome";
-  else if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) browser = "Safari";
-  else if (/Firefox/i.test(ua)) browser = "Firefox";
-  else if (/Edg/i.test(ua)) browser = "Edge";
-
-  // Detect Device Type
-  if (/Mobile|Android|iPhone|iPad|iPod/i.test(ua)) {
-    deviceType = /iPad/i.test(ua) ? "tablet" : "mobile";
-  }
-
-  return { os, browser, deviceType };
+export function buildMetadata(pathname = (typeof window !== 'undefined' ? window.location.pathname : '/')) {
+  const referrer = (typeof document !== 'undefined' ? document.referrer : '') || null;
+  const deviceParsed = parseUserAgent(typeof navigator !== 'undefined' ? navigator.userAgent : '');
+  const { ua, os, browser } = deviceParsed;
+  const location = getLocationHints();
+  return {
+    path: pathname,
+    referrer,
+    device: { ua, os, browser },
+    location,
+  };
 }
 
 /**
  * PUBLIC_INTERFACE
- * trackPageView posts a page_view activity for the current page.
+ * trackPageView posts a page_view activity for the given path.
  */
-export function trackPageView(page = window.location.pathname) {
-  const device = detectDevice();
+export function trackPageView(pathname = (typeof window !== 'undefined' ? window.location.pathname : '/')) {
+  const metadata = buildMetadata(pathname);
   postActivity({
     type: "page_view",
-    page,
-    device,
-    metadata: { referrer: document.referrer || null },
+    metadata,
+  });
+}
+
+/**
+ * PUBLIC_INTERFACE
+ * trackSessionStart posts a session_start activity.
+ */
+export function trackSessionStart() {
+  const metadata = buildMetadata();
+  postActivity({
+    type: "session_start",
+    metadata,
+  });
+}
+
+/**
+ * PUBLIC_INTERFACE
+ * trackSessionEnd posts a session_end activity.
+ */
+export function trackSessionEnd() {
+  const metadata = buildMetadata();
+  postActivity({
+    type: "session_end",
+    metadata,
   });
 }
 
@@ -80,24 +91,9 @@ export function trackPageView(page = window.location.pathname) {
  * trackLogin posts a login activity.
  */
 export function trackLogin() {
-  const device = detectDevice();
+  const metadata = buildMetadata();
   postActivity({
     type: "login",
-    page: window.location.pathname,
-    device,
-  });
-}
-
-/**
- * PUBLIC_INTERFACE
- * trackClick posts a click activity with optional metadata.
- */
-export function trackClick(metadata = {}) {
-  const device = detectDevice();
-  postActivity({
-    type: "click",
-    page: window.location.pathname,
-    device,
     metadata,
   });
 }

@@ -6,6 +6,7 @@ import Users from '../pages/Users';
 import Settings from '../pages/Settings';
 import Login from '../pages/Login';
 import { useAuthContext } from '../context/AuthContext';
+import { useActivityTracking } from '../hooks/useActivityTracking';
 
 function LoadingScreen() {
   return (
@@ -30,6 +31,8 @@ function ProtectedRoute({ children, requireAdmin = false }) {
 
 function AppRouter() {
   const { loading } = useAuthContext();
+  // Install tracking at the router level so every route change is recorded
+  useActivityTracking();
 
   return (
     <Router>
