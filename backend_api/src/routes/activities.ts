@@ -3,7 +3,7 @@ import Joi from 'joi';
 import mongoose from 'mongoose';
 import { requireRole } from '../middleware/auth.js';
 import { clerkAuthMiddleware } from '../middleware/clerkAuth.js';
-import { createActivity, listRecentActivities } from '../services/activityService.js';
+import { createActivity, listRecentActivities, trackEvent } from '../services/activityService.js';
 import { debugLog } from '../utils/debug.js';
 import { Session } from '../models/Session.js';
 
@@ -23,6 +23,72 @@ router.get('/recent', clerkAuthMiddleware, async (req: Request, res: Response) =
   const items = await listRecentActivities(limit);
   debugLog('activities:recent', 'Returning items', { count: items.length, limit });
   return res.status(200).json({ items });
+});
+
+/**
+ * PUBLIC_INTERFACE
+ * POST /api/activities/track
+ * Tracks analytics events with session upsert behavior for session_* events.
+ * Body:
+ * {
+ *   type: 'page_view'|'login'|'session_start'|'session_end',
+ *   timestamp?, sessionId?,
+ *   device?: { ua, os, browser, deviceType },
+ *   location?: { ip, country, region, city },
+ *   path?, referrer?, extra?
+ * }
+ * Uses Clerk-authenticated user for clerkUserId and email.
+ */
+router.post('/track', clerkAuthMiddleware, async (req: Request, res: Response) => {
+  debugLog('activities:track', 'Incoming', {
+    user: req.user,
+    hasAuth: !!req.headers.authorization,
+  });
+
+  const schema = Joi.object({
+    type: Joi.string().valid('page_view', 'login', 'session_start', 'session_end').required(),
+    timestamp: Joi.alternatives(Joi.date(), Joi.string(), Joi.number()).optional(),
+    sessionId: Joi.string().optional().allow(null, ''),
+    device: Joi.object({
+      ua: Joi.string().optional().allow(null, ''),
+      os: Joi.string().optional(),
+      browser: Joi.string().optional(),
+      deviceType: Joi.string().optional().allow(null, ''),
+    }).optional(),
+    location: Joi.object({
+      ip: Joi.string().optional().allow(null, ''),
+      country: Joi.string().optional(),
+      region: Joi.string().optional(),
+      city: Joi.string().optional(),
+      lat: Joi.number().optional(),
+      lon: Joi.number().optional(),
+    }).optional(),
+    path: Joi.string().optional().allow(null, ''),
+    referrer: Joi.string().optional().allow(null, ''),
+    extra: Joi.object().optional(),
+  });
+
+  const { error, value } = schema.validate(req.body);
+  if (error) return res.status(400).json({ error: error.message });
+
+  try {
+    const { id: clerkUserId, email } = req.user!;
+    const result = await trackEvent({
+      type: value.type,
+      timestamp: value.timestamp,
+      sessionId: value.sessionId || null,
+      device: value.device,
+      location: value.location,
+      path: value.path || null,
+      referrer: value.referrer || null,
+      extra: value.extra || null,
+      clerkUserId,
+      email,
+    });
+    return res.status(200).json(result);
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to track event' });
+  }
 });
 
 /**
