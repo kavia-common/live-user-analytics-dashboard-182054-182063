@@ -5,7 +5,7 @@ import { applyTheme, getStoredTheme, storeTheme } from "./utils/theme";
 
 /**
  * PUBLIC_INTERFACE
- * App is the top-level component handling theme and rendering routes.
+ * Root App component that renders the application router and handles theme.
  */
 function App() {
   const [theme, setTheme] = useState(getStoredTheme());

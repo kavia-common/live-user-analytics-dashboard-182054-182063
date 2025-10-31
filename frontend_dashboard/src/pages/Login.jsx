@@ -1,30 +1,32 @@
-import React, { useEffect } from "react";
-import { useAuth } from "@clerk/clerk-react";
-import { trackLogin } from "../utils/activity";
+import React from "react";
+import { SignIn } from "@clerk/clerk-react";
 
 /**
  * PUBLIC_INTERFACE
- * Login placeholder: instructs users to use the Clerk SignIn widget route.
- * Tracks login event when authenticated. No redirects here to avoid loops.
+ * Login page rendering Clerk's SignIn component centered on the page.
+ * This page is accessible to unauthenticated users and will be gated by routing.
  */
 export default function Login() {
-  const { isSignedIn } = useAuth();
-
-  useEffect(() => {
-    if (isSignedIn) {
-      trackLogin();
-    }
-  }, [isSignedIn]);
-
   return (
-    <div style={{ display: "grid", placeItems: "center", height: "60vh", color: "#6b7280" }}>
-      <div>
-        <div style={{ fontSize: 18, fontWeight: 600, textAlign: "center" }}>
-          Please sign in to continue
-        </div>
-        <div style={{ fontSize: 14, marginTop: 8, textAlign: "center" }}>
-          Open the Sign In page from your authentication flow.
-        </div>
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background:
+          "linear-gradient(135deg, rgba(124,58,237,0.08), rgba(243,244,246,1))",
+        padding: "2rem",
+      }}
+    >
+      <div
+        style={{
+          padding: "1rem",
+          borderRadius: "16px",
+          backdropFilter: "blur(8px)",
+        }}
+      >
+        <SignIn routing="path" path="/login" signUpUrl="/sign-up" />
       </div>
     </div>
   );

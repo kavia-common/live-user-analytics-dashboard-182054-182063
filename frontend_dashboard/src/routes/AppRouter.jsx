@@ -1,74 +1,95 @@
-import React, { useEffect } from 'react';
-import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { SignedIn, SignedOut, SignUp } from '@clerk/clerk-react';
 import Dashboard from '../pages/Dashboard';
 import Users from '../pages/Users';
 import Settings from '../pages/Settings';
 import Login from '../pages/Login';
-import { useAuthContext } from '../context/AuthContext';
-import { useActivityTracking } from '../hooks/useActivityTracking';
+import '../styles/theme.css';
 
 /**
- * AppRouter handles top-level routing with guarded navigation that avoids loops.
- * Uses isSignedIn (derived from user presence) and current path to only navigate
- * when the destination differs, preventing circular redirects and render churn.
+ * PUBLIC_INTERFACE
+ * AppRouter defines application routing and uses Clerk auth guards.
+ * - /login: visible when SignedOut, redirects to /dashboard when SignedIn
+ * - /sign-up: optional sign up route visible when SignedOut
+ * - Protected routes (/dashboard, /users, /settings) require SignedIn
  */
-function LoadingScreen() {
-  return (
-    <div style={{ display: 'grid', placeItems: 'center', height: '100vh', color: '#6b7280' }}>
-      <div>
-        <div style={{ fontSize: 18, fontWeight: 600 }}>Loading...</div>
-        <div style={{ fontSize: 14, marginTop: 6 }}>Preparing your dashboard</div>
-      </div>
-    </div>
-  );
-}
-
 export default function AppRouter() {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const { loading, user } = useAuthContext();
-  const isSignedIn = !!user;
-
-  // Temporarily keep activity tracking hook; it is internally no-op stubbed elsewhere if disabled
-  useActivityTracking(true);
-
-  useEffect(() => {
-    if (loading) return;
-    const path = location.pathname;
-
-    if (isSignedIn) {
-      if (path === '/login' || path === '/') {
-        navigate('/dashboard', { replace: true });
-      }
-    } else {
-      if (!path.startsWith('/login')) {
-        navigate('/login', { replace: true });
-      }
-    }
-  }, [isSignedIn, loading, navigate, location.pathname]);
-
-  if (loading) return <LoadingScreen />;
-
   return (
-    <Routes>
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route
-        path="/login"
-        element={isSignedIn ? <Navigate to="/dashboard" replace /> : <Login />}
-      />
-      <Route
-        path="/dashboard"
-        element={isSignedIn ? <Dashboard /> : <Navigate to="/login" replace />}
-      />
-      <Route
-        path="/users"
-        element={isSignedIn ? <Users /> : <Navigate to="/login" replace />}
-      />
-      <Route
-        path="/settings"
-        element={isSignedIn ? <Settings /> : <Navigate to="/login" replace />}
-      />
-      <Route path="*" element={<Navigate to={isSignedIn ? '/dashboard' : '/login'} replace />} />
-    </Routes>
+    <Router>
+      <Routes>
+        {/* Login route */}
+        <Route
+          path="/login"
+          element={
+            <>
+              <SignedIn>
+                <Navigate to="/dashboard" replace />
+              </SignedIn>
+              <SignedOut>
+                <Login />
+              </SignedOut>
+            </>
+          }
+        />
+        {/* Optional sign-up route */}
+        <Route
+          path="/sign-up"
+          element={
+            <>
+              <SignedIn>
+                <Navigate to="/dashboard" replace />
+              </SignedIn>
+              <SignedOut>
+                <div
+                  style={{
+                    minHeight: '100vh',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'linear-gradient(135deg, rgba(124,58,237,0.08), rgba(243,244,246,1))',
+                    padding: '2rem',
+                  }}
+                >
+                  <div style={{ padding: '1rem', borderRadius: '16px', backdropFilter: 'blur(8px)' }}>
+                    <SignUp routing="path" path="/sign-up" signInUrl="/login" />
+                  </div>
+                </div>
+              </SignedOut>
+            </>
+          }
+        />
+
+        {/* Protected routes */}
+        <Route
+          path="/dashboard"
+          element={
+            <SignedIn>
+              <Dashboard />
+            </SignedIn>
+          }
+        />
+        <Route
+          path="/users"
+          element={
+            <SignedIn>
+              <Users />
+            </SignedIn>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <SignedIn>
+              <Settings />
+            </SignedIn>
+          }
+        />
+
+        {/* Root and fallback */}
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </Router>
   );
 }
