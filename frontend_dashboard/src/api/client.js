@@ -1,24 +1,31 @@
 import axios from 'axios';
 
 /**
- * PUBLIC_INTERFACE
- * api client
- * Axios instance configured for SAME-ORIGIN by default.
- *
- * Defaults:
- *  - baseURL = '' so calls like api.get('/api/users') go to the current origin.
- * Overrides:
- *  - REACT_APP_API_URL can be set to a full URL (e.g., https://api.example.com or https://api.example.com/api)
- * Notes:
- *  - Do not append '/api' inside baseURL. Use '/api/...' in call sites or normalize via interceptors below.
+ * Determine base URL using CRA env and optional runtime config shim.
+ * - Prefer REACT_APP_frontend_dashboard.REACT_APP_API_URL
+ * - Then REACT_APP_API_URL
+ * - Then window.__CONFIG__.REACT_APP_API_URL or .API_URL
+ * - Else same-origin: ''
  */
-const RAW_API_URL = (process.env.REACT_APP_API_URL || '').trim();
+const BUILD_API_URL =
+  (process.env.REACT_APP_frontend_dashboard &&
+    process.env.REACT_APP_frontend_dashboard.REACT_APP_API_URL) ||
+  process.env.REACT_APP_API_URL ||
+  '';
+
+const RUNTIME_API_URL =
+  (typeof window !== 'undefined' &&
+    window.__CONFIG__ &&
+    (window.__CONFIG__.REACT_APP_API_URL || window.__CONFIG__.API_URL)) ||
+  '';
+
+const RAW_API_URL = (BUILD_API_URL || RUNTIME_API_URL || '').trim();
 
 /**
  * PUBLIC_INTERFACE
  * rawBaseUrl
  * Returns normalized base URL string used for fetch calls.
- * Default is '' (same-origin). If REACT_APP_API_URL is set, trailing slashes are trimmed.
+ * Default is '' (same-origin). If override is set, trailing slashes are trimmed.
  */
 export function rawBaseUrl() {
   const override = RAW_API_URL;
@@ -37,7 +44,7 @@ if (baseURL.endsWith('/')) {
 }
 
 const api = axios.create({
-  baseURL, // '' for same-origin, or override from REACT_APP_API_URL
+  baseURL, // '' for same-origin, or override from env/runtime config
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
@@ -64,7 +71,8 @@ api.interceptors.request.use((config) => {
 api.interceptors.request.use(
   async (config) => {
     try {
-      const clerk = (typeof window !== 'undefined' && (window.Clerk || window.clerk)) || null;
+      const clerk =
+        (typeof window !== 'undefined' && (window.Clerk || window.clerk)) || null;
       const session = clerk && clerk.session;
       if (session && typeof session.getToken === 'function') {
         const token = await session.getToken({ template: 'default' }).catch(() => null);

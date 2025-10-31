@@ -1,13 +1,35 @@
 import { useEffect, useRef, useState } from 'react';
 
-const SOCKET_URL =
-  process.env.REACT_APP_frontend_dashboard?.REACT_APP_SOCKET_URL ||
+/**
+ * Read socket URL/path from CRA build-time env with runtime window.__CONFIG__ fallbacks.
+ * Never rely on `process` at runtime; CRA replaces process.env.REACT_APP_* at build time.
+ */
+const BUILD_SOCKET_URL =
+  (process.env.REACT_APP_frontend_dashboard &&
+    process.env.REACT_APP_frontend_dashboard.REACT_APP_SOCKET_URL) ||
   process.env.REACT_APP_SOCKET_URL ||
   '';
-const SOCKET_PATH =
-  process.env.REACT_APP_frontend_dashboard?.REACT_APP_SOCKET_PATH ||
+
+const BUILD_SOCKET_PATH =
+  (process.env.REACT_APP_frontend_dashboard &&
+    process.env.REACT_APP_frontend_dashboard.REACT_APP_SOCKET_PATH) ||
   process.env.REACT_APP_SOCKET_PATH ||
-  '/socket.io';
+  '';
+
+const RUNTIME_SOCKET_URL =
+  (typeof window !== 'undefined' &&
+    window.__CONFIG__ &&
+    (window.__CONFIG__.REACT_APP_SOCKET_URL || window.__CONFIG__.SOCKET_URL)) ||
+  '';
+
+const RUNTIME_SOCKET_PATH =
+  (typeof window !== 'undefined' &&
+    window.__CONFIG__ &&
+    (window.__CONFIG__.REACT_APP_SOCKET_PATH || window.__CONFIG__.SOCKET_PATH)) ||
+  '';
+
+const SOCKET_URL = (BUILD_SOCKET_URL || RUNTIME_SOCKET_URL || '').replace(/\/+$/, '');
+const SOCKET_PATH = (BUILD_SOCKET_PATH || RUNTIME_SOCKET_PATH || '/socket.io') || '/socket.io';
 
 // Lazy import to avoid hard dependency if socket.io-client not installed by template
 let ioLib = null;
