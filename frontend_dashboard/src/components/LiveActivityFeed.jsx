@@ -1,99 +1,118 @@
-import React, { useEffect, useState } from "react";
-import apiClient from "../api/client";
-import { useSocket } from "../hooks/useSocket";
-import Card from "./ui/Card";
-import Badge from "./ui/Badge";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import "./LiveActivityFeed.css";
+import apiClient from "../api/client";
+import useSocket from "../hooks/useSocket";
 
 /**
  * PUBLIC_INTERFACE
- * LiveActivityFeed shows a live-updating feed of activity events with enhanced styling.
+ * LiveActivityFeed
+ * Subscribes to 'activity:new' and renders newest events at the top.
+ * Loads an initial page of activities on mount. Debounces bursty inserts to reduce layout thrash.
  */
 export default function LiveActivityFeed() {
-  const [items, setItems] = useState([]);
-  const { lastActivity } = useSocket();
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const { data } = await apiClient.get("/activities/recent?limit=25");
-        if (mounted) setItems(data.items || []);
-      } catch {
-        // ignore
+  // Buffer + debounce to handle bursts
+  const bufferRef = useRef([]);
+  const debounceTimerRef = useRef(null);
+
+  const flushBuffer = useCallback(() => {
+    if (!bufferRef.current.length) return;
+    setEvents((prev) => {
+      const merged = [...bufferRef.current, ...prev];
+      return merged.slice(0, 100);
+    });
+    bufferRef.current = [];
+  }, []);
+
+  const enqueueEvent = useCallback(
+    (payload) => {
+      bufferRef.current.push(payload);
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
       }
-    })();
-    return () => { mounted = false; };
+      debounceTimerRef.current = setTimeout(flushBuffer, 250);
+    },
+    [flushBuffer]
+  );
+
+  const socketRef = useSocket({
+    onEvent: (event, payload) => {
+      if (event === "activity:new") {
+        enqueueEvent(payload);
+      }
+    },
+  });
+
+  const loadInitial = useCallback(async () => {
+    try {
+      setLoading(true);
+      // allow either /activities or /activities/recent depending on backend
+      const res =
+        (await apiClient.get("/activities?limit=30").catch(() => null)) ||
+        (await apiClient.get("/activities/recent?limit=30").catch(() => null));
+
+      const data =
+        res?.data?.items || // newer API
+        res?.data || // simple array fallback
+        [];
+
+      setEvents(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error("[LiveActivityFeed] Failed to load initial activity", e);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    if (lastActivity) {
-      setItems((prev) => [lastActivity, ...prev].slice(0, 50));
-    }
-  }, [lastActivity]);
-
-  const getActivityIcon = (type) => {
-    const icons = {
-      login: "🔐",
-      logout: "👋",
-      page_view: "👁️",
-      click: "🖱️",
-      navigation: "🧭"
+    loadInitial();
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      bufferRef.current = [];
     };
-    return icons[type] || "📌";
-  };
+  }, [loadInitial]);
 
-  const formatTime = (timestamp) => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diff = Math.floor((now - date) / 1000);
-    
-    if (diff < 60) return `${diff}s ago`;
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-    return date.toLocaleDateString();
-  };
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket) return;
+
+    const handler = (payload) => enqueueEvent(payload);
+    socket.on("activity:new", handler);
+
+    return () => {
+      socket.off("activity:new", handler);
+    };
+  }, [socketRef, enqueueEvent]);
+
+  if (loading) {
+    return <div className="live-activity-feed">Loading activity…</div>;
+  }
+
+  if (!events.length) {
+    return <div className="live-activity-feed">No recent activity.</div>;
+  }
 
   return (
-    <Card className="live-activity-feed" padding="lg">
-      <div className="live-activity-feed__header">
-        <h3 className="live-activity-feed__title">
-          <span className="live-pulse" />
-          Live Activity Feed
-        </h3>
-        <Badge variant="primary" size="sm">{items.length} events</Badge>
-      </div>
-      
-      <div className="live-activity-feed__list">
-        {items.map((it, idx) => (
-          <div key={`${it.id}-${idx}`} className="activity-item">
-            <span className="activity-item__icon">{getActivityIcon(it.type)}</span>
-            <div className="activity-item__content">
-              <div className="activity-item__header">
-                <span className="activity-item__type">{it.type.replace('_', ' ')}</span>
-                <span className="activity-item__time">{formatTime(it.occurredAt)}</span>
-              </div>
-              <div className="activity-item__meta">
-                {it.page && <span className="activity-item__page">{it.page}</span>}
-                <div className="activity-item__badges">
-                  {it.device?.deviceType && (
-                    <Badge variant="default" size="sm">{it.device.deviceType}</Badge>
-                  )}
-                  {it.location?.country && (
-                    <Badge variant="default" size="sm">{it.location.country}</Badge>
-                  )}
-                </div>
-              </div>
+    <div className="live-activity-feed">
+      {events.map((e, idx) => (
+        <div key={e._id || e.id || `${e.type}-${e.timestamp || e.occurredAt}-${idx}`} className="feed-item">
+          <div className="feed-item-header">
+            <span className="feed-type">{e.type}</span>
+            <span className="feed-time">
+              {e.timestamp || e.occurredAt ? new Date(e.timestamp || e.occurredAt).toLocaleString() : ""}
+            </span>
+          </div>
+          <div className="feed-body">
+            <div className="feed-user">{e.user?.email || e.userId || e.user?.id}</div>
+            <div className="feed-meta">
+              <span>{e.device?.type || e.device?.deviceType}</span>
+              <span>{e.location?.city || e.location?.country}</span>
             </div>
           </div>
-        ))}
-        {!items.length && (
-          <div className="activity-item--empty">
-            <span>📭</span>
-            <span>No activity yet</span>
-          </div>
-        )}
-      </div>
-    </Card>
+        </div>
+      ))}
+    </div>
   );
 }

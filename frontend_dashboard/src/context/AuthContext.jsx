@@ -1,6 +1,14 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useAuth, useUser } from '@clerk/clerk-react';
-import apiClient, { setAuthTokenProvider } from '../api/client';
+import apiClient from '../api/client';
 
 // PUBLIC_INTERFACE
 // AuthContextValue shape exposed to the app.
@@ -44,19 +52,6 @@ export function AuthProvider({ children }) {
   const [backendUser, setBackendUser] = useState(null);
   const abortRef = useRef(null);
 
-  // Keep axios token fresh via provider callback
-  useEffect(() => {
-    setAuthTokenProvider(async () => {
-      if (!authLoaded || !isSignedIn) return null;
-      try {
-        const t = await getToken().catch(() => null);
-        return t || null;
-      } catch {
-        return null;
-      }
-    });
-  }, [authLoaded, isSignedIn, getToken]);
-
   const refresh = useCallback(async () => {
     if (abortRef.current) abortRef.current.abort();
     const controller = new AbortController();
@@ -67,7 +62,7 @@ export function AuthProvider({ children }) {
       let t = null;
       if (authLoaded && isSignedIn) {
         try {
-          t = await getToken().catch(() => null);
+          t = await getToken({ template: 'default' }).catch(() => null);
         } catch {
           t = null;
         }
@@ -99,6 +94,15 @@ export function AuthProvider({ children }) {
       if (abortRef.current) abortRef.current.abort();
     };
   }, [authLoaded, userLoaded, isSignedIn, clerkUser, refresh]);
+
+  // Periodically refresh token in background (optional)
+  useEffect(() => {
+    if (!authLoaded) return undefined;
+    const id = setInterval(() => {
+      refresh();
+    }, 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [authLoaded, refresh]);
 
   // Clear on sign-out
   useEffect(() => {

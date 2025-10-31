@@ -1,90 +1,98 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { io } from "socket.io-client";
-import { useAuthContext } from "../context/AuthContext";
 
 /**
  * PUBLIC_INTERFACE
- * useSocket connects to the /realtime namespace using Clerk JWT and returns socket and live events.
+ * useSocket
+ * A reusable hook to open an authenticated Socket.IO connection to the backend /realtime namespace.
+ * - Attaches Clerk Bearer token in auth payload (from window.Clerk if available)
+ * - Uses SOCKET_PATH if provided (REACT_APP_SOCKET_PATH)
+ * - Auto-reconnects with backoff
+ * - Accepts onConnect/onDisconnect and a catch-all onEvent handler
+ *
+ * Usage:
+ * const socketRef = useSocket({ onEvent: (event, payload) => {} });
+ * const socket = socketRef.current;
  */
-export function useSocket() {
-  const [connected, setConnected] = useState(false);
-  const [lastActivity, setLastActivity] = useState(null);
-  const [lastStats, setLastStats] = useState(null);
+export default function useSocket({ onConnect, onDisconnect, onEvent } = {}) {
   const socketRef = useRef(null);
 
-  // Call hook at top level
-  const { token } = useAuthContext();
-
   useEffect(() => {
-    // Tear down any previous socket when token changes to re-auth
-    if (socketRef.current) {
-      socketRef.current.disconnect();
-      socketRef.current = null;
+    const BASE_URL =
+      process.env.REACT_APP_SOCKET_URL ||
+      process.env.REACT_APP_API_URL ||
+      "";
+
+    if (!BASE_URL) {
+      console.warn(
+        "Socket URL not configured (REACT_APP_SOCKET_URL or REACT_APP_API_URL). Realtime disabled."
+      );
+      return;
     }
 
-    // Resolve base URL: prefer standardized CRA envs; fall back to same-origin (CRA proxy)
-    const directSocket = process.env.REACT_APP_SOCKET_URL;
-    const directApi = process.env.REACT_APP_API_URL;
-    const explicitBase = directSocket || directApi || null;
-    const url = explicitBase ? `${String(explicitBase).replace(/\/*$/, "")}/realtime` : undefined;
-    if (!explicitBase && process.env.NODE_ENV !== "production") {
-      // eslint-disable-next-line no-console
-      console.warn("[socket] REACT_APP_SOCKET_URL not set; using same-origin via CRA proxy.");
-    }
+    const SOCKET_PATH =
+      process.env.REACT_APP_SOCKET_PATH ||
+      process.env.REACT_APP_frontend_dashboard_REACT_APP_SOCKET_PATH || // namespaced fallback
+      "/socket.io";
 
-    const SOCKET_PATH = process.env.REACT_APP_SOCKET_PATH || "/socket.io";
+    // Attempt to get Clerk session token without importing SDK here (keep hook light)
+    const getAuthToken = async () => {
+      try {
+        if (window && window.Clerk && window.Clerk.session) {
+          const token = await window.Clerk.session.getToken({ template: "default" });
+          return token || null;
+        }
+      } catch (e) {
+        console.warn("[useSocket] Clerk token fetch failed:", e?.message || e);
+      }
+      return null;
+    };
 
-    const authHeader = token ? { token: `Bearer ${token}` } : undefined;
-    if (!token && process.env.NODE_ENV !== "production") {
-      // eslint-disable-next-line no-console
-      console.debug("[socket] No auth token available; connecting without auth (dev)");
-    }
+    let cancelled = false;
 
-    const s = io(url, {
-      path: SOCKET_PATH,
-      transports: ["websocket"],
-      auth: authHeader,
-    });
-    socketRef.current = s;
+    (async () => {
+      const token = await getAuthToken();
+      if (cancelled) return;
 
-    s.on("connect", () => {
-      // eslint-disable-next-line no-console
-      console.log("[socket] ✓ Connected to realtime namespace");
-      setConnected(true);
-    });
-    s.on("disconnect", () => {
-      // eslint-disable-next-line no-console
-      console.log("[socket] ✗ Disconnected from realtime");
-      setConnected(false);
-    });
-    s.on("connected", () => {
-      // eslint-disable-next-line no-console
-      console.log("[socket] ✓ Handshake confirmed");
-    });
-    s.on("connect_error", (err) => {
-      // eslint-disable-next-line no-console
-      console.error("[socket] Connection error:", err.message);
-    });
+      const socket = io(`${String(BASE_URL).replace(/\/*$/, "")}/realtime`, {
+        path: SOCKET_PATH,
+        transports: ["websocket"],
+        withCredentials: true,
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 500,
+        reconnectionDelayMax: 5000,
+        // Provide token both in auth and query for broader backend compatibility
+        auth: token ? { token: `Bearer ${token}` } : {},
+        query: token ? { token: `Bearer ${token}` } : {},
+      });
 
-    s.on("activity:new", (payload) => {
-      // eslint-disable-next-line no-console
-      console.log("[socket] 📥 Activity received:", payload?.type);
-      setLastActivity(payload);
-    });
+      socketRef.current = socket;
 
-    s.on("stats:update", (payload) => {
-      // eslint-disable-next-line no-console
-      console.log("[socket] 📊 Stats update received");
-      setLastStats(payload);
-    });
+      socket.on("connect", () => {
+        onConnect && onConnect(socket);
+      });
+
+      socket.on("disconnect", (reason) => {
+        onDisconnect && onDisconnect(reason);
+      });
+
+      if (onEvent && typeof onEvent === "function") {
+        socket.onAny((event, ...args) => {
+          onEvent(event, ...args);
+        });
+      }
+    })();
 
     return () => {
+      cancelled = true;
       if (socketRef.current) {
-        socketRef.current.disconnect();
+        socketRef.current.removeAllListeners();
+        socketRef.current.close();
         socketRef.current = null;
       }
     };
-  }, [token]);
+  }, [onConnect, onDisconnect, onEvent]);
 
-  return { socket: socketRef.current, connected, lastActivity, lastStats };
+  return socketRef;
 }

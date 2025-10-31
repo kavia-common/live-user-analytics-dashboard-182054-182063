@@ -1,152 +1,127 @@
-import React, { useEffect, useState } from "react";
-import apiClient from "../api/client";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import "./Dashboard.css";
 import StatCard from "../components/StatCard";
 import LineChart from "../components/charts/LineChart";
 import BarChart from "../components/charts/BarChart";
 import PieChart from "../components/charts/PieChart";
 import LiveActivityFeed from "../components/LiveActivityFeed";
-import EmptyState from "../components/EmptyState";
-import DebugBanner from "../components/DebugBanner";
-import { useSocket } from "../hooks/useSocket";
-import { trackPageView } from "../utils/activity";
-import "./Dashboard.css";
+import useSocket from "../hooks/useSocket";
+import apiClient from "../api/client";
 
-// PUBLIC_INTERFACE
+/**
+ * PUBLIC_INTERFACE
+ * Dashboard
+ * Loads analytics stats (overview, timeseries, devices, locations) on mount.
+ * Subscribes to `stats:update` via realtime socket and refreshes stats with debounced fetch
+ * to avoid over-fetching on bursty updates.
+ */
 export default function Dashboard() {
-  /** Main dashboard page with KPIs, charts, and live activity feed. */
-  const [overview, setOverview] = useState({ activeSessions: 0, eventsCount: 0, uniqueUsers: 0 });
-  const [series, setSeries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [overview, setOverview] = useState(null);
+  const [timeseries, setTimeseries] = useState([]);
   const [devices, setDevices] = useState([]);
   const [locations, setLocations] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState(null);
-  const { lastStats } = useSocket();
 
-  const fetchAll = async () => {
-    setLoading(true);
-    setFetchError(null);
+  const inFlightRef = useRef(false);
+  const debounceTimerRef = useRef(null);
+
+  const fetchStats = useCallback(async () => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     try {
-      const [ov, ts, dev, loc] = await Promise.all([
-        apiClient.get("/stats/overview?sinceMinutes=60"),
-        apiClient.get("/stats/timeseries?intervalMinutes=5&totalMinutes=60"),
-        apiClient.get("/stats/devices?sinceMinutes=60"),
-        apiClient.get("/stats/locations?sinceMinutes=60"),
+      setLoading(true);
+      const [ovr, ts, dev, loc] = await Promise.all([
+        apiClient.get("/stats/overview").then((r) => r.data),
+        apiClient.get("/stats/timeseries").then((r) => r.data),
+        apiClient.get("/stats/devices").then((r) => r.data),
+        apiClient.get("/stats/locations").then((r) => r.data),
       ]);
-      setOverview(ov.data);
-      setSeries(ts.data.series || []);
-      setDevices(dev.data.devices || []);
-      setLocations(loc.data.locations || []);
-      // eslint-disable-next-line no-console
-      console.log("[Dashboard] Data fetched:", { overview: ov.data, seriesCount: ts.data.series?.length });
-    } catch (err) {
-      console.error("[Dashboard] Failed to fetch dashboard data:", err?.response?.status, err?.message);
-      setFetchError(err?.response?.status === 401 ? "Authentication required" : "Failed to load data");
+      setOverview(ovr);
+      setTimeseries(ts);
+      setDevices(dev);
+      setLocations(loc);
+    } catch (e) {
+      console.error("[Dashboard] Failed to fetch stats", e);
     } finally {
       setLoading(false);
+      inFlightRef.current = false;
     }
-  };
-
-  useEffect(() => {
-    fetchAll();
-    // Track page view on mount
-    trackPageView("/");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Live comprehensive updates from socket
-  useEffect(() => {
-    if (lastStats) {
-      // eslint-disable-next-line no-console
-      console.log("[Dashboard] Socket stats update received:", lastStats);
-      // If lastStats contains full data structure, update all
-      if (lastStats.overview) {
-        setOverview(lastStats.overview);
-      } else {
-        // Backward compatibility: minimal overview update
-        setOverview((o) => ({ ...o, ...lastStats }));
-      }
-      if (lastStats.timeseries) {
-        setSeries(lastStats.timeseries);
-      }
-      if (lastStats.devices) {
-        setDevices(lastStats.devices);
-      }
-      if (lastStats.locations) {
-        setLocations(lastStats.locations);
-      }
+  const debouncedRefresh = useCallback(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
     }
-  }, [lastStats]);
+    debounceTimerRef.current = setTimeout(() => {
+      fetchStats();
+    }, 500);
+  }, [fetchStats]);
 
-  if (loading) {
-    return (
-      <div className="dashboard">
-        <DebugBanner />
-        <div className="dashboard__loading">
-          <span className="dashboard__spinner" />
-          <span>Loading dashboard data...</span>
-        </div>
-      </div>
-    );
-  }
+  // Initial load
+  useEffect(() => {
+    fetchStats();
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    };
+  }, [fetchStats]);
 
-  // Check if we have empty data
-  const isEmpty = overview.eventsCount === 0 && series.length === 0 && devices.length === 0;
+  // Wire up socket events and catch-all handler
+  const socketRef = useSocket({
+    onConnect: () => {
+      debouncedRefresh();
+    },
+    onDisconnect: () => {},
+    onEvent: (eventName) => {
+      if (eventName === "stats:update") {
+        debouncedRefresh();
+      }
+    },
+  });
 
-  if (isEmpty && !fetchError) {
-    return (
-      <div className="dashboard">
-        <DebugBanner />
-        <EmptyState onDataSeeded={fetchAll} />
-      </div>
-    );
-  }
+  // Direct subscription as a safeguard
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket) return;
+
+    const handler = () => debouncedRefresh();
+    socket.on("stats:update", handler);
+
+    return () => {
+      socket.off("stats:update", handler);
+    };
+  }, [socketRef, debouncedRefresh]);
+
+  const cards = useMemo(() => {
+    if (!overview) return [];
+    return [
+      { label: "Active Users", value: overview.activeUsers || 0 },
+      { label: "Total Sessions", value: overview.totalSessions || 0 },
+      { label: "Page Views", value: overview.pageViews || 0 },
+      { label: "Conversion Rate", value: `${overview.conversionRate || 0}%` },
+    ];
+  }, [overview]);
 
   return (
-    <div className="dashboard">
-      <DebugBanner />
-      <header className="dashboard__header">
-        <h1 className="dashboard__title">Dashboard</h1>
-        <p className="dashboard__subtitle">Real-time analytics overview</p>
-      </header>
-
-      <div className="grid stats">
-        <StatCard 
-          title="Active Sessions" 
-          value={overview.activeSessions ?? 0}
-          icon="🔗"
-        />
-        <StatCard 
-          title="Events (Last Hour)" 
-          value={overview.eventsCount ?? 0}
-          icon="⚡"
-        />
-        <StatCard 
-          title="Unique Users" 
-          value={overview.uniqueUsers ?? 0}
-          icon="👤"
-        />
-        <StatCard 
-          title="Window" 
-          value={`${overview.windowMinutes ?? 60}m`}
-          icon="⏱️"
-        />
+    <div className="dashboard-container">
+      <div className="stats-grid">
+        {cards.map((c) => (
+          <StatCard key={c.label} label={c.label} value={c.value} loading={loading} />
+        ))}
       </div>
 
-      <div className="section">
-        <div className="dashboard__charts">
-          <LineChart data={series} />
-          <BarChart 
-            title="Device & Browser" 
-            data={devices.map(d => ({ 
-              label: `${d.deviceType} · ${d.browser}`, 
-              value: d.count 
-            }))} 
-          />
+      <div className="charts-grid">
+        <div className="chart-card">
+          <LineChart data={timeseries} loading={loading} />
         </div>
-        <PieChart title="Top Countries" data={locations} />
+        <div className="chart-card">
+          <BarChart data={devices} loading={loading} />
+        </div>
+        <div className="chart-card">
+          <PieChart data={locations} loading={loading} />
+        </div>
       </div>
 
-      <div className="dashboard__feed-section">
+      <div className="live-feed-card">
         <LiveActivityFeed />
       </div>
     </div>
