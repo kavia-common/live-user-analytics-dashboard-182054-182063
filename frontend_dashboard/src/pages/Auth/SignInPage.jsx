@@ -1,0 +1,16 @@
+import React from 'react';
+import { SignIn } from '@clerk/clerk-react';
+
+export default function SignInPage() {
+  return (
+    <div className="centered">
+      <div className="auth-card">
+        <div className="brand" style={{ marginBottom: 12 }}>
+          <div className="brand-badge">UA</div>
+          Welcome back
+        </div>
+        <SignIn routing="path" path="/sign-in" signUpUrl="/sign-up" />
+      </div>
+    </div>
+  );
+}

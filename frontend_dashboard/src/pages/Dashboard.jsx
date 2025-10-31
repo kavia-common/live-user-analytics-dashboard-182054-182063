@@ -1,114 +1,96 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import "./Dashboard.css";
-import StatCard from "../components/StatCard";
-import LineChart from "../components/charts/LineChart";
-import BarChart from "../components/charts/BarChart";
-import PieChart from "../components/charts/PieChart";
-import LiveActivityFeed from "../components/LiveActivityFeed";
-import useSocket from "../hooks/useSocket";
-import apiClient from "../api/client";
+import React from 'react';
+import StatCard from '../components/Stats/StatCard';
+import LineChart from '../components/Charts/LineChart';
+import BarChart from '../components/Charts/BarChart';
+import PieChart from '../components/Charts/PieChart';
+import LiveFeed from '../components/Feed/LiveFeed';
+import { apiGet } from '../utils/apiClient';
+import { useBackendHealth } from '../hooks/useBackendHealth';
+import { useSocket } from '../hooks/useSocket';
+import { fallbackStats, fallbackLineData, fallbackBarData, fallbackPieData, fallbackFeed } from '../utils/fallbackData';
 
-/**
- * PUBLIC_INTERFACE
- * Dashboard
- * Loads analytics stats (overview, timeseries, devices, locations) on mount.
- * Subscribes to `stats:update` via realtime socket and refreshes stats with debounced fetch
- * to avoid over-fetching on bursty updates.
- */
 export default function Dashboard() {
-  const [loading, setLoading] = useState(true);
-  const [overview, setOverview] = useState(null);
-  const [timeseries, setTimeseries] = useState([]);
-  const [devices, setDevices] = useState([]);
-  const [locations, setLocations] = useState([]);
+  const { healthy } = useBackendHealth();
+  const { socket, connected } = useSocket('/analytics');
 
-  const inFlightRef = useRef(false);
-  const debounceTimerRef = useRef(null);
+  const [stats, setStats] = React.useState(fallbackStats);
+  const [line, setLine] = React.useState(fallbackLineData);
+  const [bar, setBar] = React.useState(fallbackBarData);
+  const [pie, setPie] = React.useState(fallbackPieData);
+  const [feed, setFeed] = React.useState(fallbackFeed);
+  const [loading, setLoading] = React.useState(true);
 
-  const fetchStats = useCallback(async () => {
-    if (inFlightRef.current) return;
-    inFlightRef.current = true;
-    try {
-      setLoading(true);
-      const [ovr, ts, dev, loc] = await Promise.all([
-        apiClient.get("/stats/overview").then((r) => r.data),
-        apiClient.get("/stats/timeseries").then((r) => r.data),
-        apiClient.get("/stats/devices").then((r) => r.data),
-        apiClient.get("/stats/locations").then((r) => r.data),
-      ]);
-      setOverview(ovr || {});
-      setTimeseries(ts || []);
-      setDevices(dev || []);
-      setLocations(loc || []);
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error("[Dashboard] Failed to fetch stats", e);
-    } finally {
-      setLoading(false);
-      inFlightRef.current = false;
-    }
+  React.useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const [s, l, b, p] = await Promise.all([
+          apiGet('/stats/summary'),
+          apiGet('/stats/line'),
+          apiGet('/stats/bars'),
+          apiGet('/stats/pie'),
+        ]);
+        if (!cancelled) {
+          setStats({
+            logins: s.logins, pageViews: s.pageViews, activeSessions: s.activeSessions,
+            deltaLogins: s.deltaLogins, deltaPageViews: s.deltaPageViews, deltaActiveSessions: s.deltaActiveSessions
+          });
+          setLine(l?.points || fallbackLineData);
+          setBar(b?.bars || fallbackBarData);
+          setPie(p?.slices || fallbackPieData);
+        }
+      } catch (e) {
+        // keep fallbacks
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
   }, []);
 
-  const debouncedRefresh = useCallback(() => {
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
-    debounceTimerRef.current = setTimeout(() => {
-      fetchStats();
-    }, 500);
-  }, [fetchStats]);
+  React.useEffect(() => {
+    if (!socket) return;
+    const onStats = (payload) => setStats((prev) => ({ ...prev, ...payload }));
+    const onEvent = (evt) => setFeed((f) => [{ id: evt.id || String(Date.now()), ...evt }, ...f].slice(0, 40));
 
-  // Initial load
-  useEffect(() => {
-    fetchStats();
+    socket.on && socket.on('stats:update', onStats);
+    socket.on && socket.on('activity', onEvent);
+
     return () => {
-      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      socket.off && socket.off('stats:update', onStats);
+      socket.off && socket.off('activity', onEvent);
     };
-  }, [fetchStats]);
-
-  // Wire up socket events
-  const { subscribe } = useSocket();
-
-  useEffect(() => {
-    const unsubscribe = subscribe("stats:update", () => {
-      debouncedRefresh();
-    });
-    return () => {
-      unsubscribe && unsubscribe();
-    };
-  }, [subscribe, debouncedRefresh]);
-
-  const cards = useMemo(() => {
-    const ov = overview || {};
-    return [
-      { label: "Active Sessions", value: ov.activeSessions ?? 0 },
-      { label: "Users Online", value: ov.usersOnline ?? 0 },
-      { label: "Page Views", value: ov.pageViews ?? 0 },
-      { label: "Errors", value: ov.errors ?? 0 },
-    ];
-  }, [overview]);
+  }, [socket]);
 
   return (
-    <div className="dashboard">
-      <div className="stats-grid">
-        {cards.map((c) => (
-          <StatCard key={c.label} title={c.label} value={c.value} loading={loading} />
-        ))}
+    <div style={{ display: 'grid' }}>
+      {!healthy && (
+        <div className="banner" style={{ marginBottom: 12 }}>
+          Backend offline - showing live UI with placeholders. Some data may be simulated.
+        </div>
+      )}
+      <div className="grid cols-3">
+        <StatCard label="Logins" value={stats.logins} delta={stats.deltaLogins} icon="🔐" />
+        <StatCard label="Page Views" value={stats.pageViews} delta={stats.deltaPageViews} icon="👁️" />
+        <StatCard label="Active Sessions" value={stats.activeSessions} delta={stats.deltaActiveSessions} icon="🟢" />
       </div>
 
-      <div className="charts-grid">
-        <div className="chart-card">
-          <LineChart data={timeseries} loading={loading} />
+      <div className="grid cols-2" style={{ marginTop: 16 }}>
+        <div className="grid" style={{ gap: 16 }}>
+          <LineChart data={line} />
+          <BarChart data={bar} />
         </div>
-        <div className="chart-card">
-          <BarChart data={devices} loading={loading} />
-        </div>
-        <div className="chart-card">
-          <PieChart data={locations} loading={loading} />
+        <div className="grid" style={{ gap: 16 }}>
+          <PieChart data={pie} />
+          <LiveFeed items={feed} />
         </div>
       </div>
 
-      <LiveActivityFeed />
+      <div className="small" style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
+        <span className="badge">{connected ? 'Socket: Connected' : 'Socket: Offline'}</span>
+        {loading ? <span>Loading analytics…</span> : <span>Updated in real-time.</span>}
+      </div>
     </div>
   );
 }

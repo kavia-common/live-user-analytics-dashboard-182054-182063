@@ -1,42 +1,26 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
-import App from './App';
+import './main.css';
 import { BrowserRouter } from 'react-router-dom';
 import { ClerkProvider } from '@clerk/clerk-react';
-import { AuthProvider } from './context/AuthContext';
+import AppRouter from './routes/AppRouter';
 
-// PUBLIC_INTERFACE
-// Entrypoint: Mounts ClerkProvider around the app with routing enabled.
-// Reads Clerk publishable key from environment.
 const PUBLISHABLE_KEY =
-  // Standard CRA variable
   process.env.REACT_APP_CLERK_PUBLISHABLE_KEY ||
-  // Some orchestrators may map namespaced vars into plain CRA env
-  process.env.REACT_APP_REACT_APP_CLERK_PUBLISHABLE_KEY;
+  process.env.REACT_APP_REACT_APP_CLERK_PUBLISHABLE_KEY ||
+  '';
 
 if (!PUBLISHABLE_KEY) {
-  // Helpful warning to aid debugging during setup without breaking the app.
-  // Ensure REACT_APP_CLERK_PUBLISHABLE_KEY is set in the environment (.env).
-  // eslint-disable-next-line no-console
-  console.warn(
-    'Warning: REACT_APP_CLERK_PUBLISHABLE_KEY is not set. Clerk authentication will not function correctly.'
-  );
+  console.warn('CLERK publishable key missing. Set REACT_APP_CLERK_PUBLISHABLE_KEY to enable authentication.');
 }
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    {/* The BrowserRouter here is the single, top-level Router for the app.
-        Do not render another Router inside child components (e.g., AppRouter). */}
-    <ClerkProvider
-      publishableKey={PUBLISHABLE_KEY}
-      navigate={(to) => window.history.pushState(null, '', to)}
-    >
+    <ClerkProvider publishableKey={PUBLISHABLE_KEY}>
       <BrowserRouter>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
+        <AppRouter />
       </BrowserRouter>
     </ClerkProvider>
   </React.StrictMode>

@@ -1,39 +1,55 @@
 import { useEffect, useState } from 'react';
-import { getClient, rawBaseUrl } from '../api/client';
+import { API_BASE_URL } from '../utils/apiClient';
 
-/**
- * PUBLIC_INTERFACE
- * useBackendHealth
- * Returns a boolean or null (unknown) indicating whether the backend is healthy.
- * It performs a single ping to /api/health on mount and caches the result for the session.
- */
-export default function useBackendHealth() {
+// PUBLIC_INTERFACE
+export function useBackendHealth(pollMs = 20000) {
+  /** Returns { healthy, loading, error } and rechecks periodically */
   const [healthy, setHealthy] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    let mounted = true;
+    let cancelled = false;
+    let timer;
+
+    const withTimeout = (p, ms = 2500) =>
+      Promise.race([
+        p,
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms)),
+      ]);
 
     const check = async () => {
+      setLoading(true);
       try {
-        // We intentionally use fetch to avoid axios interceptors altering behavior.
-        const res = await fetch(`${rawBaseUrl()}/api/health`, {
-          credentials: 'same-origin',
-          headers: { 'Accept': 'application/json' },
-        });
-        if (!mounted) return;
-        setHealthy(res.ok);
+        if (!API_BASE_URL) {
+          setHealthy(false);
+          setError(new Error('API URL missing'));
+          return;
+        }
+        const res = await withTimeout(fetch(`${API_BASE_URL}/health`), 2500);
+        if (!res.ok) throw new Error('not ok');
+        if (!cancelled) {
+          setHealthy(true);
+          setError(null);
+        }
       } catch (e) {
-        if (!mounted) return;
-        setHealthy(false);
+        if (!cancelled) {
+          setHealthy(false);
+          setError(e);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     };
 
     check();
+    timer = setInterval(check, pollMs);
 
     return () => {
-      mounted = false;
+      cancelled = true;
+      clearInterval(timer);
     };
-  }, []);
+  }, [pollMs]);
 
-  return healthy;
+  return { healthy, loading, error };
 }

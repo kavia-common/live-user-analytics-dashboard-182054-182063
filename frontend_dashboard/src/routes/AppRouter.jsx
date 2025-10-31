@@ -1,101 +1,79 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { SignedIn, SignedOut, SignUp } from '@clerk/clerk-react';
+import { SignedIn, SignedOut, RedirectToSignIn } from '@clerk/clerk-react';
+import App from '../App';
 import Dashboard from '../pages/Dashboard';
 import Users from '../pages/Users';
 import Settings from '../pages/Settings';
-import Login from '../pages/Login';
-import '../styles/theme.css';
+import SignInPage from '../pages/Auth/SignInPage';
+import SignUpPage from '../pages/Auth/SignUpPage';
 
-/**
- * PUBLIC_INTERFACE
- * AppRouter defines application routing and uses Clerk auth guards.
- * NOTE: This component must NOT render a Router. The top-level Router is provided in src/index.js.
- * - /login: visible when SignedOut, redirects to /dashboard when SignedIn
- * - /sign-up: optional sign up route visible when SignedOut
- * - Protected routes (/dashboard, /users, /settings) require SignedIn
- */
+function ErrorBoundary({ children }) {
+  const [err, setErr] = React.useState(null);
+  return (
+    <React.Fragment>
+      {err ? (
+        <div className="card" style={{ padding: 16 }}>
+          <div className="banner">Something went wrong: {String(err)}</div>
+        </div>
+      ) : (
+        <React.ErrorBoundary fallbackRender={({ error }) => {
+          return <div className="banner" style={{ margin: 16 }}>Error: {String(error)}</div>;
+        }}>
+          {children}
+        </React.ErrorBoundary>
+      )}
+    </React.Fragment>
+  );
+}
+
 export default function AppRouter() {
   return (
-    <Routes>
-      {/* Login route */}
-      <Route
-        path="/login"
-        element={
-          <>
-            <SignedIn>
-              <Navigate to="/dashboard" replace />
-            </SignedIn>
-            <SignedOut>
-              <Login />
-            </SignedOut>
-          </>
-        }
-      />
-      {/* Optional sign-up route */}
-      <Route
-        path="/sign-up"
-        element={
-          <>
-            <SignedIn>
-              <Navigate to="/dashboard" replace />
-            </SignedIn>
-            <SignedOut>
-              <div
-                style={{
-                  minHeight: '100vh',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background:
-                    'linear-gradient(135deg, rgba(124,58,237,0.08), rgba(243,244,246,1))',
-                  padding: '2rem',
-                }}
-              >
-                <div
-                  style={{
-                    padding: '1rem',
-                    borderRadius: '16px',
-                    backdropFilter: 'blur(8px)',
-                  }}
-                >
-                  <SignUp routing="path" path="/sign-up" signInUrl="/login" />
-                </div>
-              </div>
-            </SignedOut>
-          </>
-        }
-      />
-
-      {/* Protected routes */}
-      <Route
-        path="/dashboard"
-        element={
-          <SignedIn>
-            <Dashboard />
-          </SignedIn>
-        }
-      />
-      <Route
-        path="/users"
-        element={
-          <SignedIn>
-            <Users />
-          </SignedIn>
-        }
-      />
-      <Route
-        path="/settings"
-        element={
-          <SignedIn>
-            <Settings />
-          </SignedIn>
-        }
-      />
-
-      {/* Root and fallback */}
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
-    </Routes>
+    <Suspense fallback={<div className="centered"><div className="auth-card"><div className="skeleton" style={{ width: 280, height: 20, marginBottom: 12 }} /><div className="skeleton" style={{ width: 420, height: 120 }} /></div></div>}>
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <>
+              <SignedIn>
+                <App><Dashboard /></App>
+              </SignedIn>
+              <SignedOut>
+                <RedirectToSignIn />
+              </SignedOut>
+            </>
+          }
+        />
+        <Route
+          path="/users"
+          element={
+            <>
+              <SignedIn>
+                <App><Users /></App>
+              </SignedIn>
+              <SignedOut>
+                <RedirectToSignIn />
+              </SignedOut>
+            </>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <>
+              <SignedIn>
+                <App><Settings /></App>
+              </SignedIn>
+              <SignedOut>
+                <RedirectToSignIn />
+              </SignedOut>
+            </>
+          }
+        />
+        <Route path="/sign-in/*" element={<SignInPage />} />
+        <Route path="/sign-up/*" element={<SignUpPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   );
 }
